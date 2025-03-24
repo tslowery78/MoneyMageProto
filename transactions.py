@@ -180,10 +180,37 @@ def get_old_transactions(transactions_xlsx):
     f = pd.ExcelFile(transactions_xlsx)
     df = f.parse(sheet_name='Transactions')
     df.fillna('', inplace=True)
-    df['Date'] = pd.to_datetime(df['Date'])
+    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df.sort_values('Date', inplace=True)
     old_transactions = df.to_dict('list')
-    old_transactions['Date'] = [x.to_pydatetime().date() for x in old_transactions['Date']]
+    
+    # Handle potential mixed types in the Date column
+    converted_dates = []
+    for x in old_transactions['Date']:
+        if pd.isna(x):
+            # Handle NaN values
+            converted_dates.append(None)
+        elif isinstance(x, (int, float)):
+            # Handle numeric values by converting them to datetime
+            try:
+                dt = pd.to_datetime(x)
+                converted_dates.append(dt.date())
+            except:
+                # If conversion fails, use None
+                converted_dates.append(None)
+        else:
+            # Handle datetime objects
+            try:
+                converted_dates.append(x.to_pydatetime().date())
+            except AttributeError:
+                # Fallback for any other types
+                try:
+                    dt = pd.to_datetime(x)
+                    converted_dates.append(dt.date())
+                except:
+                    converted_dates.append(None)
+    
+    old_transactions['Date'] = converted_dates
 
     return f, old_transactions
 
