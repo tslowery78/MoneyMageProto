@@ -1,0 +1,38 @@
+# Excel files
+*.xlsx
+*.xls
+*.xlsm
+*.xlsb
+
+# Backup files
+archive/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.env
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python distribution / packaging
+dist/
+build/
+*.egg-info/ 
