@@ -72,7 +72,52 @@ The system supports different budget types for various expense categories:
    - Tracks regular payments against loans
    - Supports amortization calculations
 
-## Usage
+## Setup
+
+### Dependencies
+
+This project requires:
+- Python 3.8 or higher
+- pandas
+- openpyxl
+- xlsxwriter
+- numpy
+
+### Virtual Environment Setup
+
+It's recommended to use a virtual environment to manage dependencies:
+
+```bash
+# Create virtual environment
+python -m venv venv
+
+# Activate (Windows)
+venv\Scripts\activate
+
+# Activate (macOS/Linux)
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+See `VENV_SETUP.md` for more detailed instructions on setting up and using the virtual environment.
+
+### Git Configuration
+
+This project includes a `.gitignore` file configured to exclude:
+- Excel files (*.xlsx, *.xls)
+- Backup files in the archive/ directory
+- Python cache files
+- Virtual environment directories
+
+To initialize the Git repository:
+
+```bash
+git init
+git add .
+git commit -m "Initial commit"
+```
 
 ### Setting Up
 
@@ -83,10 +128,13 @@ The system supports different budget types for various expense categories:
 
 2. Configure your financial accounts in the `get_new_transactions()` function in `transactions.py`
 
+## Usage
+
 ### Running the System
 
 1. Download transaction exports from your financial institutions
-2. Run the budget meeting script:
+2. Activate your virtual environment
+3. Run the budget meeting script:
    ```
    python BudgetMeeting.py -y 2025 -b Budget_2025.xlsx -t transactions.xlsx
    ```
@@ -94,7 +142,7 @@ The system supports different budget types for various expense categories:
    - `-b`: Budget Excel filename (default: Budget_2025.xlsx)
    - `-t`: Transactions Excel filename (default: transactions.xlsx)
 
-3. Review the updated budget file for:
+4. Review the updated budget file for:
    - Updated category sheets with actual vs. planned spending
    - Projection sheets showing future financial state
    - Summary sheets for quick review
@@ -128,3 +176,12 @@ The budget Excel file contains multiple sheets:
 2. **Categorization**: Maintain the auto-categorization rules to minimize manual categorization
 3. **Yearly Planning**: Use the projection sheets to plan for the upcoming year
 4. **Backup**: Keep copies of your budget files in case of data corruption
+
+## Documentation
+
+This project includes several documentation files:
+- `README.md` - General overview and usage instructions
+- `ARCHITECTURE.md` - Technical architecture and data flow
+- `USAGE_GUIDE.md` - Detailed usage instructions and workflows
+- `FINANCIAL_CONCEPTS.md` - Explanation of financial concepts
+- `VENV_SETUP.md` - Virtual environment setup instructions
