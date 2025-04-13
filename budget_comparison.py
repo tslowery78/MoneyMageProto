@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+import argparse
 from datetime import datetime
 import glob
 from visualization import setup_plotting_style, load_budget_data, load_transaction_data
@@ -577,5 +578,45 @@ def compare_and_plot_transaction_versions(current_file=None, previous_file=None,
     else:
         print("Could not compare transactions")
 
+def main():
+    parser = argparse.ArgumentParser(description='Compare two budget Excel file versions.')
+    parser.add_argument(
+        '-b', '--base', 
+        default='Budget_2025.xlsx',
+        help='Path to the base budget file (current version). Default: Budget_2025.xlsx'
+    )
+    parser.add_argument(
+        'compare_file', 
+        help='Path to the budget file to compare against (previous version).'
+    )
+    parser.add_argument(
+        '-t', '--top_n', 
+        type=int, 
+        default=10, 
+        help='Number of top changes to display in plots. Default: 10'
+    )
+    parser.add_argument(
+        '--no-save', 
+        action='store_false', 
+        dest='save', 
+        help='Do not save the generated plots.'
+    )
+
+    args = parser.parse_args()
+
+    print(f"Comparing BASE budget: {args.base}")
+    print(f"Against PREVIOUS budget: {args.compare_file}")
+
+    # Call the main comparison function for budgets
+    compare_and_plot_budget_versions(
+        current_file=args.base, 
+        previous_file=args.compare_file, 
+        top_n=args.top_n, 
+        save=args.save
+    )
+    
+    # Optionally, add transaction comparison call here if needed
+    # compare_and_plot_transaction_versions(current_file=args.base, previous_file=args.compare_file, ...)
+
 if __name__ == "__main__":
-    compare_and_plot_budget_versions() 
+    main() 
