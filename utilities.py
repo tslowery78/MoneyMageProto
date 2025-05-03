@@ -50,6 +50,8 @@ def dates_to_str(my_dict):
     for key, key_list in my_dict.items():
         if key == 'Date' or key == 'Month' or key == 'End of Year':
             dates = my_dict[key]
+            if not dates:
+                continue
             if isinstance(dates[0], int):
                 continue
             my_dict[key] = ['' if x == '' else x.strftime('%m/%d/%Y') for x in dates]

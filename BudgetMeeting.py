@@ -15,6 +15,7 @@ import shutil
 def update_budget(budget_xlsx, transactions, this_year):
     """Function to update the budget with the latest transactions"""
 
+    
     # Read in the budget xlsx
     os.makedirs('archive/', exist_ok=True)
     back_up_xls = budget_xlsx.split('.')[0] \

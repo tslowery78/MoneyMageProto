@@ -18,9 +18,14 @@ def get_new_transactions():
     except IndexError:
         wf_file = ''
     try:
-        chase_file = glob.glob(f'{downloads_dir}Chase3376_Activity_*.CSV')[0]
+        chase_files = sorted(glob.glob(f'{downloads_dir}Chase3376_Activity_*.CSV'))
+        if chase_files:
+            chase_file = chase_files[-1]
+        else:
+            chase_file = ''
     except IndexError:
         chase_file = ''
+    print(f"Debug: chase_file path found: {chase_file}")
     try:
         rr_file = glob.glob(f'{downloads_dir}Chase9*_Activity_*.csv')[0]
     except IndexError:
@@ -29,6 +34,7 @@ def get_new_transactions():
         ally_file = glob.glob(f'{downloads_dir}transactions*.csv')[0]
     except IndexError:
         ally_file = ''
+    print(chase_file)
     # Get the transactions
     # WF Active
     wf_dates =[]
@@ -109,6 +115,7 @@ def get_new_transactions():
         'R': ['']*len(zipped),
         'Notes': ['']*len(zipped)
     }
+    print('here')
 
     # Auto categorize
     b = pd.ExcelFile('auto_categories.xlsx')
@@ -137,17 +144,28 @@ def update_old_transactions(new_transactions, old_transactions):
         if i_same_date:
             amount_sum = 0
             for c, i in enumerate(i_same_date):
-                if similar(new_transactions['Description'][d], old_transactions['Description'][i]) >= 0.5:
-                    if new_transactions['Amount'][d] == old_transactions['Amount'][i]:
+                similarity_score = similar(new_transactions['Description'][d], old_transactions['Description'][i])
+                amount_match = new_transactions['Amount'][d] == old_transactions['Amount'][i]
+
+                if similarity_score >= 0.5:
+                    if amount_match:
                         new_transactions['R'][d] = 'd'
                         break
                     amount_sum += old_transactions['Amount'][i]
                 if c == len(i_same_date) - 1:
-                    if abs(new_transactions['Amount'][d]) - abs(amount_sum) < 0.001:
+                    amount_diff = abs(abs(new_transactions['Amount'][d]) - abs(amount_sum))
+                    if amount_diff < 0.001:
                         new_transactions['R'][d] = 'd'
+        elif new_transactions['Account'][d] == 'chase_checking':
+             print(f"  No old transactions found on this date.")
+
+
     new_transactions_no_duplicates = {}
     for item, i_list in new_transactions.items():
-        new_transactions_no_duplicates[item] = [x for i, x in enumerate(i_list) if new_transactions['R'][i] != 'd']
+        new_transactions_no_duplicates[item] = []
+        for i, x in enumerate(i_list):
+            if new_transactions['R'][i] != 'd':
+                 new_transactions_no_duplicates[item].append(x)
 
     # Update transactions
     transactions_updated = {}
@@ -224,17 +242,7 @@ def get_transactions(transactions_xlsx):
     # Get the old transactions from the transactions xlsx
     f, old_transactions = get_old_transactions(transactions_xlsx)
 
-    # Check if the new transactions have already been imported
-    new_transactions_check = {'Amount': []}
-    if f:
-        if 'Imported' in f.sheet_names:
-            df_new_transactions_check = f.parse(sheet_name='Imported')
-            new_transactions_check = df_new_transactions_check.to_dict('list')
-
-    # If new transactions have not been imported, update the old transactions
-    if sum(new_transactions['Amount']) != sum(new_transactions_check['Amount']):
-        transactions = update_old_transactions(new_transactions, old_transactions)
-    else:
-        transactions = old_transactions
+    # Always attempt to update transactions, duplicate handling is done inside update_old_transactions
+    transactions = update_old_transactions(new_transactions.copy(), old_transactions)
 
     return transactions
