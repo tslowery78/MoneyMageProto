@@ -4,6 +4,7 @@ import pandas as pd
 from utilities import cat_lists, similar
 from excel_management import write_transactions_xlsx
 import glob
+from itertools import combinations
 
 
 def get_new_transactions():
@@ -15,48 +16,29 @@ def get_new_transactions():
     else:
         downloads_dir = 'C:\\Users\\tslow\\Downloads\\'
     
-    print(f"Debug: downloads_dir = {downloads_dir}")
-    
     try:
-        wf_matches = glob.glob(f'{downloads_dir}CreditCard*.csv')
-        print(f"Debug: WF matches = {wf_matches}")
-        wf_file = wf_matches[0]
-        print(f"Debug: wf_file = {wf_file}")
+        wf_file = glob.glob(f'{downloads_dir}CreditCard*.csv')[0]
     except IndexError:
         wf_file = ''
-        print("Debug: No WF file found")
     
     try:
-        chase_matches = sorted(glob.glob(f'{downloads_dir}Chase3376_Activity_*.CSV'))
-        print(f"Debug: Chase matches = {chase_matches}")
-        if chase_matches:
-            chase_file = chase_matches[-1]
-            print(f"Debug: chase_file = {chase_file}")
+        chase_files = sorted(glob.glob(f'{downloads_dir}Chase3376_Activity_*.CSV'))
+        if chase_files:
+            chase_file = chase_files[-1]
         else:
             chase_file = ''
-            print("Debug: No Chase files in sorted list")
     except IndexError:
         chase_file = ''
-        print("Debug: IndexError for Chase files")
-    print(f"Debug: chase_file path found: {chase_file}")
     
     try:
-        rr_matches = glob.glob(f'{downloads_dir}Chase9*_Activity_*.csv')
-        print(f"Debug: RR matches = {rr_matches}")
-        rr_file = rr_matches[0]
-        print(f"Debug: rr_file = {rr_file}")
+        rr_file = glob.glob(f'{downloads_dir}Chase9*_Activity_*.csv')[0]
     except IndexError:
         rr_file = ''
-        print("Debug: No RR file found")
     
     try:
-        ally_matches = glob.glob(f'{downloads_dir}transactions*.csv')
-        print(f"Debug: Ally matches = {ally_matches}")
-        ally_file = ally_matches[0]
-        print(f"Debug: ally_file = {ally_file}")
+        ally_file = glob.glob(f'{downloads_dir}transactions*.csv')[0]
     except IndexError:
         ally_file = ''
-        print("Debug: No Ally file found")
 
     # Get the transactions
     # WF Active
@@ -162,26 +144,98 @@ def update_old_transactions(new_transactions, old_transactions):
     # Remove the new transactions that are duplicates of old transactions
     new_transactions_descriptions = new_transactions['Description']
     new_transactions['Description'] = [x.replace('"', '') for x in new_transactions_descriptions]
+    
     for d, date_value in enumerate(new_transactions['Date']):
+        # Find all old transactions on the same date
         i_same_date = [i for i, x in enumerate(old_transactions['Date']) if x == date_value]
+        
         if i_same_date:
-            amount_sum = 0
-            for c, i in enumerate(i_same_date):
+            print(f"Debug: Checking new transaction: {new_transactions['Description'][d]} = ${new_transactions['Amount'][d]} on {date_value}")
+            
+            # First, check for split transaction scenario (prioritize this over exact matches)
+            # Find all transactions with similar descriptions on the same date
+            similar_transactions = []
+            exact_match_transaction = None
+            
+            for i in i_same_date:
                 similarity_score = similar(new_transactions['Description'][d], old_transactions['Description'][i])
-                amount_match = new_transactions['Amount'][d] == old_transactions['Amount'][i]
-
-                if similarity_score >= 0.5:
-                    if amount_match:
-                        new_transactions['R'][d] = 'd'
-                        break
-                    amount_sum += old_transactions['Amount'][i]
-                if c == len(i_same_date) - 1:
-                    amount_diff = abs(abs(new_transactions['Amount'][d]) - abs(amount_sum))
-                    if amount_diff < 0.001:
-                        new_transactions['R'][d] = 'd'
+                amount_match = abs(new_transactions['Amount'][d] - old_transactions['Amount'][i]) < 0.01
+                
+                print(f"  vs old: {old_transactions['Description'][i]} = ${old_transactions['Amount'][i]}, similarity: {similarity_score:.2f}, amount_match: {amount_match}")
+                
+                # Track exact matches but don't immediately mark as duplicate
+                if similarity_score >= 0.8 and amount_match:
+                    exact_match_transaction = i
+                
+                # Collect similar transactions for split detection
+                if similarity_score >= 0.7:
+                    similar_transactions.append({
+                        'index': i,
+                        'amount': old_transactions['Amount'][i],
+                        'description': old_transactions['Description'][i],
+                        'similarity': similarity_score,
+                        'notes': old_transactions['Notes'][i] if 'Notes' in old_transactions else '',
+                        'r_flag': old_transactions['R'][i] if 'R' in old_transactions else ''
+                    })
+            
+            # Check for split transaction scenario first
+            split_detected = False
+            if len(similar_transactions) > 1:  # Must have multiple similar transactions for split
+                print(f"  Found {len(similar_transactions)} similar transactions:")
+                for st in similar_transactions:
+                    print(f"    {st['description']} = ${st['amount']} (similarity: {st['similarity']:.2f}, R: '{st['r_flag']}')")
+                
+                # Calculate sum of similar transactions (excluding exact matches from the sum)
+                split_transactions = [st for st in similar_transactions if abs(st['amount'] - new_transactions['Amount'][d]) >= 0.01]
+                total_amount = sum(st['amount'] for st in split_transactions)
+                amount_diff = abs(abs(new_transactions['Amount'][d]) - abs(total_amount))
+                
+                print(f"  Split transactions sum: ${total_amount}")
+                print(f"  New transaction amount: ${new_transactions['Amount'][d]}")
+                print(f"  Difference: ${amount_diff}")
+                
+                # Check for split markers
+                has_split_marker = any(
+                    'x' in str(st['r_flag']).lower() or 
+                    'split' in str(st['notes']).lower()
+                    for st in split_transactions
+                )
+                
+                # If the sum matches and there are split markers, it's a split transaction
+                if amount_diff < 0.01 and has_split_marker and len(split_transactions) >= 2:
+                    print(f"  -> Split transaction detected (sum match + split markers), marking as 'd'")
+                    new_transactions['R'][d] = 'd'
+                    split_detected = True
+                # Alternative: if there are multiple split transactions with markers
+                elif has_split_marker and len(split_transactions) >= 2:
+                    print(f"  -> Split transaction detected (multiple split markers), marking as 'd'")
+                    new_transactions['R'][d] = 'd'
+                    split_detected = True
+            
+            # Only check for exact match if no split was detected
+            if not split_detected and exact_match_transaction is not None:
+                # Check if this exact match might be the original of a split transaction
+                exact_match_has_splits = False
+                if len(similar_transactions) > 1:
+                    # Check if there are other similar transactions with split markers
+                    other_similar = [st for st in similar_transactions if st['index'] != exact_match_transaction]
+                    if any('x' in str(st['r_flag']).lower() for st in other_similar):
+                        exact_match_has_splits = True
+                        print(f"  -> Exact match found, but other split transactions exist - treating as split duplicate")
+                
+                if not exact_match_has_splits:
+                    print(f"  -> Exact duplicate found, marking as 'd'")
+                    new_transactions['R'][d] = 'd'
+                else:
+                    print(f"  -> Exact match found but treating as split transaction duplicate")
+                    new_transactions['R'][d] = 'd'
+        
         elif new_transactions['Account'][d] == 'chase_checking':
-             print(f"  No old transactions found on this date.")
+            print(f"  No old transactions found on this date.")
 
+    # Report summary
+    duplicates_found = sum(1 for r in new_transactions['R'] if r == 'd')
+    print(f"Summary: Found {duplicates_found} duplicate transactions out of {len(new_transactions['Date'])} new transactions")
 
     new_transactions_no_duplicates = {}
     for item, i_list in new_transactions.items():
@@ -205,6 +259,9 @@ def update_old_transactions(new_transactions, old_transactions):
     transactions = {}
     for i, key in enumerate(transactions_updated.keys()):
         transactions[key] = [x[i] for x in zipped]
+
+    # Clean up split transactions BEFORE writing the file
+    transactions = clean_split_transactions(transactions)
 
     # Recreate the transactions xlsx with the updated transactions
     write_transactions_xlsx(transactions.copy(), new_transactions)
@@ -269,3 +326,102 @@ def get_transactions(transactions_xlsx):
     transactions = update_old_transactions(new_transactions.copy(), old_transactions)
 
     return transactions
+
+
+def clean_split_transactions(transactions):
+    """Remove uncategorized transactions that have been split into multiple categorized transactions"""
+    
+    print("Cleaning up split transactions...")
+    
+    # Create a list to track transactions to remove
+    transactions_to_remove = []
+    
+    # Group transactions by date
+    date_groups = {}
+    for i, date in enumerate(transactions['Date']):
+        if date not in date_groups:
+            date_groups[date] = []
+        date_groups[date].append(i)
+    
+    # Check each date group for split transaction scenarios
+    for date, indices in date_groups.items():
+        # Find uncategorized transactions on this date
+        uncategorized_indices = [i for i in indices if transactions['Category'][i] == 'uncategorized']
+        
+        for unc_idx in uncategorized_indices:
+            unc_desc = transactions['Description'][unc_idx]
+            unc_amount = transactions['Amount'][unc_idx]
+            unc_account = transactions['Account'][unc_idx]
+            
+            # Find similar transactions on the same date with 'x' markers
+            split_candidates = []
+            for i in indices:
+                if i == unc_idx:  # Skip the uncategorized transaction itself
+                    continue
+                    
+                # Check if this could be a split transaction
+                if (similar(unc_desc, transactions['Description'][i]) >= 0.9 and  # Very similar description
+                    transactions['Account'][i] == unc_account and  # Same account
+                    transactions['Category'][i] != 'uncategorized' and  # Is categorized
+                    str(transactions['R'][i]).lower() == 'x'):  # Has split marker
+                    
+                    split_candidates.append({
+                        'index': i,
+                        'amount': transactions['Amount'][i],
+                        'category': transactions['Category'][i],
+                        'description': transactions['Description'][i]
+                    })
+            
+            # If we found split candidates, check if they sum to the uncategorized amount
+            if len(split_candidates) >= 2:  # Must have at least 2 split transactions
+                print(f"  Checking uncategorized: {unc_desc} = ${unc_amount} on {date}")
+                print(f"    Found {len(split_candidates)} split candidates:")
+                for sc in split_candidates:
+                    print(f"      ${sc['amount']} -> {sc['category']}")
+                
+                # Try different combinations of split candidates to find exact matches
+                found_exact_split = False
+                for r in range(2, len(split_candidates) + 1):
+                    for combo in combinations(split_candidates, r):
+                        combo_sum = sum(sc['amount'] for sc in combo)
+                        amount_diff = abs(abs(unc_amount) - abs(combo_sum))
+                        
+                        if amount_diff < 0.01:  # Amounts match within tolerance
+                            print(f"    -> Found exact split match with {len(combo)} transactions:")
+                            for sc in combo:
+                                print(f"       ${sc['amount']} -> {sc['category']}")
+                            print(f"    -> Total: ${combo_sum} matches ${unc_amount}")
+                            
+                            # Mark this uncategorized transaction for removal
+                            transactions_to_remove.append(unc_idx)
+                            found_exact_split = True
+                            break
+                    
+                    if found_exact_split:
+                        break
+                
+                if not found_exact_split:
+                    print(f"    -> No exact split match found")
+    
+    # Remove the identified transactions (in reverse order to maintain indices)
+    transactions_to_remove.sort(reverse=True)
+    
+    if transactions_to_remove:
+        print(f"\nRemoving {len(transactions_to_remove)} uncategorized transactions that have been split:")
+        
+        # Create new transaction lists without the removed transactions
+        cleaned_transactions = {}
+        for key in transactions.keys():
+            cleaned_transactions[key] = []
+            for i, value in enumerate(transactions[key]):
+                if i not in transactions_to_remove:
+                    cleaned_transactions[key].append(value)
+        
+        # Show what was removed
+        for idx in sorted(transactions_to_remove):
+            print(f"  Removed: {transactions['Date'][idx]} {transactions['Description'][idx]} = ${transactions['Amount'][idx]}")
+        
+        return cleaned_transactions
+    else:
+        print("  No split transactions found to clean up")
+        return transactions
