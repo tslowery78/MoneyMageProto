@@ -10,31 +10,54 @@ def get_new_transactions():
 
     import platform
     if platform.system() == 'Darwin':
-        downloads_dir = '/Users/tslowery/Downloads/'
+        # Temporarily using current directory instead of Downloads due to permission issues
+        downloads_dir = './'  # Changed from '/Users/tslowery/Downloads/'
     else:
         downloads_dir = 'C:\\Users\\tslow\\Downloads\\'
+    
+    print(f"Debug: downloads_dir = {downloads_dir}")
+    
     try:
-        wf_file = glob.glob(f'{downloads_dir}CreditCard*.csv')[0]
+        wf_matches = glob.glob(f'{downloads_dir}CreditCard*.csv')
+        print(f"Debug: WF matches = {wf_matches}")
+        wf_file = wf_matches[0]
+        print(f"Debug: wf_file = {wf_file}")
     except IndexError:
         wf_file = ''
+        print("Debug: No WF file found")
+    
     try:
-        chase_files = sorted(glob.glob(f'{downloads_dir}Chase3376_Activity_*.CSV'))
-        if chase_files:
-            chase_file = chase_files[-1]
+        chase_matches = sorted(glob.glob(f'{downloads_dir}Chase3376_Activity_*.CSV'))
+        print(f"Debug: Chase matches = {chase_matches}")
+        if chase_matches:
+            chase_file = chase_matches[-1]
+            print(f"Debug: chase_file = {chase_file}")
         else:
             chase_file = ''
+            print("Debug: No Chase files in sorted list")
     except IndexError:
         chase_file = ''
+        print("Debug: IndexError for Chase files")
     print(f"Debug: chase_file path found: {chase_file}")
+    
     try:
-        rr_file = glob.glob(f'{downloads_dir}Chase9*_Activity_*.csv')[0]
+        rr_matches = glob.glob(f'{downloads_dir}Chase9*_Activity_*.csv')
+        print(f"Debug: RR matches = {rr_matches}")
+        rr_file = rr_matches[0]
+        print(f"Debug: rr_file = {rr_file}")
     except IndexError:
         rr_file = ''
+        print("Debug: No RR file found")
+    
     try:
-        ally_file = glob.glob(f'{downloads_dir}transactions*.csv')[0]
+        ally_matches = glob.glob(f'{downloads_dir}transactions*.csv')
+        print(f"Debug: Ally matches = {ally_matches}")
+        ally_file = ally_matches[0]
+        print(f"Debug: ally_file = {ally_file}")
     except IndexError:
         ally_file = ''
-    print(chase_file)
+        print("Debug: No Ally file found")
+
     # Get the transactions
     # WF Active
     wf_dates =[]

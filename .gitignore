@@ -4,6 +4,10 @@
 *.xlsm
 *.xlsb
 
+# CSV transaction files (sensitive financial data)
+*.csv
+*.CSV
+
 # Backup files
 archive/
 
