@@ -204,11 +204,21 @@ def make_projection_dict(projection_list, balance, year):
 def BudgetMeeting(budget_xlsx, transactions_xlsx, this_year):
     """Make a budget"""
 
+    print(f"Processing budget file: {budget_xlsx}")
+    print(f"Processing transactions file: {transactions_xlsx}")
+
     # Get the latest transactions
     transactions = get_transactions(transactions_xlsx)
+    
+    if transactions:
+        print(f"Found {len(transactions['Date'])} new transactions.")
+    else:
+        print("No new transactions found.")
 
     # Update the budget with the latest transactions
     update_budget(budget_xlsx, transactions, this_year)
+    
+    print("Budget update complete.")
 
 
 if __name__ == '__main__':

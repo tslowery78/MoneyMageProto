@@ -150,7 +150,7 @@ def update_old_transactions(new_transactions, old_transactions):
         i_same_date = [i for i, x in enumerate(old_transactions['Date']) if x == date_value]
         
         if i_same_date:
-            print(f"Debug: Checking new transaction: {new_transactions['Description'][d]} = ${new_transactions['Amount'][d]} on {date_value}")
+            # print(f"Debug: Checking new transaction: {new_transactions['Description'][d]} = ${new_transactions['Amount'][d]} on {date_value}")
             
             # First, check for split transaction scenario (prioritize this over exact matches)
             # Find all transactions with similar descriptions on the same date
@@ -161,7 +161,7 @@ def update_old_transactions(new_transactions, old_transactions):
                 similarity_score = similar(new_transactions['Description'][d], old_transactions['Description'][i])
                 amount_match = abs(new_transactions['Amount'][d] - old_transactions['Amount'][i]) < 0.01
                 
-                print(f"  vs old: {old_transactions['Description'][i]} = ${old_transactions['Amount'][i]}, similarity: {similarity_score:.2f}, amount_match: {amount_match}")
+                # print(f"  vs old: {old_transactions['Description'][i]} = ${old_transactions['Amount'][i]}, similarity: {similarity_score:.2f}, amount_match: {amount_match}")
                 
                 # Track exact matches but don't immediately mark as duplicate
                 if similarity_score >= 0.8 and amount_match:
@@ -181,18 +181,18 @@ def update_old_transactions(new_transactions, old_transactions):
             # Check for split transaction scenario first
             split_detected = False
             if len(similar_transactions) > 1:  # Must have multiple similar transactions for split
-                print(f"  Found {len(similar_transactions)} similar transactions:")
-                for st in similar_transactions:
-                    print(f"    {st['description']} = ${st['amount']} (similarity: {st['similarity']:.2f}, R: '{st['r_flag']}')")
+                # print(f"  Found {len(similar_transactions)} similar transactions:")
+                # for st in similar_transactions:
+                    # print(f"    {st['description']} = ${st['amount']} (similarity: {st['similarity']:.2f}, R: '{st['r_flag']}')")
                 
                 # Calculate sum of similar transactions (excluding exact matches from the sum)
                 split_transactions = [st for st in similar_transactions if abs(st['amount'] - new_transactions['Amount'][d]) >= 0.01]
                 total_amount = sum(st['amount'] for st in split_transactions)
                 amount_diff = abs(abs(new_transactions['Amount'][d]) - abs(total_amount))
                 
-                print(f"  Split transactions sum: ${total_amount}")
-                print(f"  New transaction amount: ${new_transactions['Amount'][d]}")
-                print(f"  Difference: ${amount_diff}")
+                # print(f"  Split transactions sum: ${total_amount}")
+                # print(f"  New transaction amount: ${new_transactions['Amount'][d]}")
+                # print(f"  Difference: ${amount_diff}")
                 
                 # Check for split markers
                 has_split_marker = any(
@@ -203,12 +203,12 @@ def update_old_transactions(new_transactions, old_transactions):
                 
                 # If the sum matches and there are split markers, it's a split transaction
                 if amount_diff < 0.01 and has_split_marker and len(split_transactions) >= 2:
-                    print(f"  -> Split transaction detected (sum match + split markers), marking as 'd'")
+                    # print(f"  -> Split transaction detected (sum match + split markers), marking as 'd'")
                     new_transactions['R'][d] = 'd'
                     split_detected = True
                 # Alternative: if there are multiple split transactions with markers
                 elif has_split_marker and len(split_transactions) >= 2:
-                    print(f"  -> Split transaction detected (multiple split markers), marking as 'd'")
+                    # print(f"  -> Split transaction detected (multiple split markers), marking as 'd'")
                     new_transactions['R'][d] = 'd'
                     split_detected = True
             
@@ -221,17 +221,18 @@ def update_old_transactions(new_transactions, old_transactions):
                     other_similar = [st for st in similar_transactions if st['index'] != exact_match_transaction]
                     if any('x' in str(st['r_flag']).lower() for st in other_similar):
                         exact_match_has_splits = True
-                        print(f"  -> Exact match found, but other split transactions exist - treating as split duplicate")
+                        # print(f"  -> Exact match found, but other split transactions exist - treating as split duplicate")
                 
                 if not exact_match_has_splits:
-                    print(f"  -> Exact duplicate found, marking as 'd'")
+                    # print(f"  -> Exact duplicate found, marking as 'd'")
                     new_transactions['R'][d] = 'd'
                 else:
-                    print(f"  -> Exact match found but treating as split transaction duplicate")
+                    # print(f"  -> Exact match found but treating as split transaction duplicate")
                     new_transactions['R'][d] = 'd'
         
         elif new_transactions['Account'][d] == 'chase_checking':
-            print(f"  No old transactions found on this date.")
+            pass
+            # print(f"  No old transactions found on this date.")
 
     # Report summary
     duplicates_found = sum(1 for r in new_transactions['R'] if r == 'd')
