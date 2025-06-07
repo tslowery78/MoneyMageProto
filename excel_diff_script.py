@@ -46,20 +46,20 @@ def enhanced_compute_differences(file1, file2, sheet_name="Monthly"):
     # Check if the sheet has a 'Categories' column to determine how to read it
     try:
         # Read a sample to check columns
-        sample_df = pd.read_excel(file1, sheet_name=sheet_name, nrows=1)
+        sample_df = pd.read_excel(file1, sheet_name=sheet_name, nrows=1, engine='openpyxl')
         has_categories = 'Categories' in sample_df.columns
-    except:
+    except Exception:
         has_categories = False
     
     if has_categories:
         # Read the sheets with 'Categories' as the index
-        monthly1 = pd.read_excel(file1, sheet_name=sheet_name, index_col='Categories')
-        monthly2 = pd.read_excel(file2, sheet_name=sheet_name, index_col='Categories')
+        monthly1 = pd.read_excel(file1, sheet_name=sheet_name, index_col='Categories', engine='openpyxl')
+        monthly2 = pd.read_excel(file2, sheet_name=sheet_name, index_col='Categories', engine='openpyxl')
         use_positional = False
     else:
         # Read the sheets without setting an index (for sheets like Q Summary)
-        monthly1 = pd.read_excel(file1, sheet_name=sheet_name)
-        monthly2 = pd.read_excel(file2, sheet_name=sheet_name)
+        monthly1 = pd.read_excel(file1, sheet_name=sheet_name, engine='openpyxl')
+        monthly2 = pd.read_excel(file2, sheet_name=sheet_name, engine='openpyxl')
         
         # For certain sheets, force positional comparison even if first column is unique
         force_positional_sheets = ['Q Summary', 'Balances', 'Expenses']
