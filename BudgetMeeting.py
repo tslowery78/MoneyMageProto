@@ -56,8 +56,13 @@ def update_budget(budget_xlsx, transactions, this_year):
                 df_budget = b.parse(sheet_name=category, usecols="A:F").fillna('')
             except ParserError:
                 df_budget = b.parse(sheet_name=category).fillna('')
-            df_budget[df_budget.columns[0]] = df_budget[df_budget.columns[0]].fillna('')
-            budget = df_budget.to_dict('list')
+
+            if df_budget.columns.empty:
+                budget = {'Date': [], 'Desc.': [], 'This Year': [], 'R': [], 'Next Year': [], 'Note': []}
+            else:
+                df_budget[df_budget.columns[0]] = df_budget[df_budget.columns[0]].fillna('')
+                budget = df_budget.to_dict('list')
+
             if 'Date' in budget.keys():
                 budget['Date'] = ['' if pd.isna(x) else x for x in budget['Date']]
                 budget = remove_empty_rows(budget, 'Date')
