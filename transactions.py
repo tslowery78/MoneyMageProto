@@ -5,6 +5,7 @@ from utilities import cat_lists, similar
 from excel_management import write_transactions_xlsx
 import glob
 from itertools import combinations
+import re
 
 
 def get_new_transactions():
@@ -138,6 +139,23 @@ def get_new_transactions():
     return out_dict
 
 
+def extract_chase_id(description):
+    """Extracts a unique ID from a Chase transaction description."""
+    # Patterns for different ID formats in Chase descriptions, ordered by specificity
+    patterns = [
+        r'ORIG ID:(\w+)',
+        r'PPD ID:\s*(\w+)',
+        r'ID\s+(\w+)',
+        r'ref\s+(\w+)',
+        r'(\w{10,})'  # General-purpose: find any long alphanumeric string
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, description, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    return None
+
+
 def update_old_transactions(new_transactions, old_transactions):
     """Function to update the existing transactions xlsx"""
 
@@ -152,6 +170,25 @@ def update_old_transactions(new_transactions, old_transactions):
         if i_same_date:
             # print(f"Debug: Checking new transaction: {new_transactions['Description'][d]} = ${new_transactions['Amount'][d]} on {date_value}")
             
+            # Special handling for Chase transactions using unique IDs
+            is_new_chase = 'chase' in new_transactions['Account'][d].lower()
+            if is_new_chase:
+                new_chase_id = extract_chase_id(new_transactions['Description'][d])
+                if new_chase_id:
+                    for i in i_same_date:
+                        is_old_chase = 'chase' in old_transactions['Account'][i].lower()
+                        if is_old_chase:
+                            old_chase_id = extract_chase_id(old_transactions['Description'][i])
+                            amount_match = abs(new_transactions['Amount'][d] - old_transactions['Amount'][i]) < 0.01
+                            if old_chase_id and old_chase_id == new_chase_id and amount_match:
+                                # print(f"  -> Chase ID match duplicate found (ID: {new_chase_id}), marking as 'd'")
+                                new_transactions['R'][d] = 'd'
+                                break  # Move to the next new transaction
+            
+            # If already marked as duplicate, skip further checks
+            if new_transactions['R'][d] == 'd':
+                continue
+
             # First, check for split transaction scenario (prioritize this over exact matches)
             # Find all transactions with similar descriptions on the same date
             similar_transactions = []
