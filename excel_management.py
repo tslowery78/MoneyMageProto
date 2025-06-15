@@ -3,6 +3,7 @@ import datetime
 from utilities import make_dict_list_same_len, dates_to_str, remove_list_blanks_nonzero
 import os
 import shutil
+from xlsxwriter.utility import xl_col_to_name
 
 
 def write_transactions_xlsx(transactions_input, new_transactions):
@@ -99,7 +100,10 @@ def write_summary_sheet_with_links(writer, df, sheet_name, nav_links=None, nav_c
                 worksheet.write_url(row_num, col_num, url, cell_format=url_format, string=cell_data)
             else:
                 if isinstance(cell_data, (int, float)):
-                    worksheet.write_number(row_num, col_num, cell_data, num_format)
+                    if pd.isna(cell_data):
+                        worksheet.write_blank(row_num, col_num, None)
+                    else:
+                        worksheet.write_number(row_num, col_num, cell_data, num_format)
                 else:
                     worksheet.write(row_num, col_num, cell_data)
 
@@ -117,6 +121,47 @@ def write_summary_sheet_with_links(writer, df, sheet_name, nav_links=None, nav_c
         if pd.notna(max_len):
             column_len = max(column_len, max_len)
         worksheet.set_column(i, i, column_len + 2)
+    
+    # Add a bar chart if 'Planned' and 'Spent' columns exist
+    if 'Planned' in df.columns and 'Spent' in df.columns and not df.empty:
+        chart = workbook.add_chart({'type': 'column'})
+        num_rows = len(df)
+        
+        # Get column indexes
+        cat_col_idx = df.columns.get_loc('Category')
+        plan_col_idx = df.columns.get_loc('Planned')
+        spent_col_idx = df.columns.get_loc('Spent')
+
+        # Define data series references
+        categories_ref = f"='{sheet_name}'!${xl_col_to_name(cat_col_idx)}$2:${xl_col_to_name(cat_col_idx)}${num_rows + 1}"
+        planned_ref = f"='{sheet_name}'!${xl_col_to_name(plan_col_idx)}$2:${xl_col_to_name(plan_col_idx)}${num_rows + 1}"
+        spent_ref = f"='{sheet_name}'!${xl_col_to_name(spent_col_idx)}$2:${xl_col_to_name(spent_col_idx)}${num_rows + 1}"
+        
+        # Add series to the chart
+        chart.add_series({
+            'name': 'Planned',
+            'categories': categories_ref,
+            'values':     planned_ref,
+            'fill':       {'color': 'green'},
+        })
+        chart.add_series({
+            'name':       'Spent',
+            'values':     spent_ref,
+            'fill':       {'color': 'red'},
+        })
+        
+        # Configure chart
+        chart.set_title({'name': f'{sheet_name} Planned vs. Spent'})
+        chart.set_x_axis({'name': 'Category', 'text_axis': True, 'num_font': {'rotation': 45}})
+        chart.set_y_axis({'name': 'Amount ($)'})
+        chart.set_size({'width': 720, 'height': 576})
+        
+        # Insert chart into the worksheet
+        chart_col = 'H'
+        if nav_col:
+            chart_col_idx = ord(nav_col[0]) - ord('A') + 2
+            chart_col = xl_col_to_name(chart_col_idx)
+        worksheet.insert_chart(f'{chart_col}2', chart)
 
 
 def write_sheet_with_all_category_links(writer, df, sheet_name, category_sheets, nav_links=None, nav_col=None):
@@ -141,7 +186,10 @@ def write_sheet_with_all_category_links(writer, df, sheet_name, category_sheets,
                 worksheet.write_url(row_num, col_num, url, cell_format=url_format, string=cell_data)
             else:
                 if isinstance(cell_data, (int, float)):
-                    worksheet.write_number(row_num, col_num, cell_data)
+                    if pd.isna(cell_data):
+                        worksheet.write_blank(row_num, col_num, None)
+                    else:
+                        worksheet.write_number(row_num, col_num, cell_data)
                 else:
                     worksheet.write(row_num, col_num, cell_data)
 
@@ -183,7 +231,10 @@ def write_sheet_with_nav_panel(writer, df, sheet_name, nav_links, nav_col):
             if isinstance(cell_data, datetime.date):
                 worksheet.write_datetime(row_num, col_num, cell_data, date_format)
             elif isinstance(cell_data, (int, float)):
-                worksheet.write_number(row_num, col_num, cell_data, num_format)
+                if pd.isna(cell_data):
+                    worksheet.write_blank(row_num, col_num, None)
+                else:
+                    worksheet.write_number(row_num, col_num, cell_data, num_format)
             else:
                 worksheet.write(row_num, col_num, cell_data)
 
@@ -231,7 +282,10 @@ def write_projection_balances_with_links(writer, df, nav_links, nav_col):
                 if isinstance(cell_data, datetime.date):
                     worksheet.write_datetime(row_num, col_num, cell_data, date_format)
                 elif isinstance(cell_data, (int, float)):
-                    worksheet.write_number(row_num, col_num, cell_data, num_format)
+                    if pd.isna(cell_data):
+                        worksheet.write_blank(row_num, col_num, None)
+                    else:
+                        worksheet.write_number(row_num, col_num, cell_data, num_format)
                 else:
                     worksheet.write(row_num, col_num, cell_data)
 
@@ -430,54 +484,3 @@ def finalize_monthly_dict(categories_organized, monthly_sums_dict):
         final_monthly_dict['Yearly'][c] = sums
 
     return final_monthly_dict
-
-
-def write_diffs_sheet_with_links(writer, df):
-    """Writes the Diffs DataFrame to a sheet with hyperlinks and navigation."""
-    sheet_name = 'Diffs'
-    workbook = writer.book
-    worksheet = workbook.add_worksheet(sheet_name)
-    writer.sheets[sheet_name] = worksheet
-
-    # Add formats
-    header_format = workbook.add_format({'bold': True, 'bottom': 1})
-    num_format = workbook.add_format({'num_format': '#,###.00'})
-    url_format = workbook.add_format({'color': 'blue', 'underline': 1})
-
-    # Write header
-    for col_num, value in enumerate(df.columns.values):
-        worksheet.write(0, col_num, value, header_format)
-
-    # Write data rows and create category hyperlinks
-    cat_col_idx = df.columns.get_loc('Category')
-    for row_num, row_data in enumerate(df.itertuples(index=False), 1):
-        for col_num, cell_data in enumerate(row_data):
-            if col_num == cat_col_idx:
-                url = f"internal:'{cell_data}'!A1"
-                worksheet.write_url(row_num, col_num, url, cell_format=url_format, string=cell_data)
-            else:
-                if isinstance(cell_data, (int, float)):
-                    worksheet.write_number(row_num, col_num, cell_data, num_format)
-                else:
-                    worksheet.write(row_num, col_num, cell_data)
-
-    # Add navigation links in column D
-    nav_links = [
-        'Q Summary',
-        'Y Summary',
-        'Expenses',
-        'Categories',
-        'Projection Balances'
-    ]
-    for i, link_sheet in enumerate(nav_links, start=1):
-        cell = f'D{i}'
-        url = f"internal:'{link_sheet}'!A1"
-        worksheet.write_url(cell, url, cell_format=url_format, string=link_sheet)
-
-    # Auto-adjust column widths
-    for i, col in enumerate(df.columns):
-        column_len = len(col)
-        max_len = df[col].astype(str).map(len).max()
-        if pd.notna(max_len):
-            column_len = max(column_len, max_len)
-        worksheet.set_column(i, i, column_len + 2)
