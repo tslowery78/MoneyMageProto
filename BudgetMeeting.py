@@ -135,8 +135,13 @@ def update_budget(budget_xlsx, transactions, this_year):
 
     # Read the balances sheet
     df_balances = b.parse(sheet_name='Balances')
+    # Clean out non-numeric values and get the last valid balance
+    valid_balances = pd.to_numeric(df_balances['Balance'], errors='coerce').dropna()
+    if not valid_balances.empty:
+        balance = valid_balances.iloc[-1]
+    else:
+        balance = 0.0
     balances_dict = df_balances.to_dict('list')
-    balance = balances_dict['Balance'][-1]
 
     # Set the initial sheets
     initial_sheets = {'Balances': balances_dict, 'Expenses': expenses, 'Categories': category_types}

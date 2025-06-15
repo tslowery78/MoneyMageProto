@@ -10,7 +10,16 @@ def remove_budget_integers(category_budget):
     fixed_category_budget = category_budget.copy()
     for a_type in a_types:
         if a_type in category_budget.keys():
-            fixed_category_budget[a_type] = remove_list_blanks(category_budget[a_type])
+            # Ensure all values are numeric, replacing blanks/non-numeric with 0.0
+            new_values = []
+            for val in category_budget[a_type]:
+                try:
+                    # Attempt to convert to float. Handles int, float, and string representations of numbers.
+                    new_values.append(float(val))
+                except (ValueError, TypeError):
+                    # If conversion fails, it's not a number or it's None/etc. Replace with 0.0
+                    new_values.append(0.0)
+            fixed_category_budget[a_type] = new_values
     return fixed_category_budget
 
 
