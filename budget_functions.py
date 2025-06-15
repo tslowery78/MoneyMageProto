@@ -247,6 +247,22 @@ def parse_default_budget(category, category_budget, actual_monthly_sums, expense
     if category in category_types['Yearly']:
         category_budget = parse_yearly_expense(category, category_budget, actual_monthly_sums, expenses)
 
+        # Calculate total spent and remaining
+        total_planned = 0
+        try:
+            i_expense = [i for i, x in enumerate(expenses['Category']) if x == category][0]
+            total_planned = expenses['This Year'][i_expense]
+        except IndexError:
+            pass  # Category might not be in expenses, handled in parse_yearly_expense
+
+        total_spent = sum(x[1] for x in actual_monthly_sums)
+        remaining = total_planned - total_spent
+        
+        category_budget['Remaining'] = [remaining]
+
+        # Ensure all lists have the same length before proceeding
+        category_budget = make_dict_list_same_len(category_budget)
+
     # Remove reconciled transactions from the category budget
     forward_category_budget = get_forward_budget(category_budget)
     reconciled_category_budget = get_reconciled_budget(category_budget)

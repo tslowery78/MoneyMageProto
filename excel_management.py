@@ -76,7 +76,7 @@ def make_xls_pretty(writer, df, sheet_name, **kwargs):
 
 
 def write_budget(budget_dict, projection_dict, initial_sheets, monthly_sums_dict, xls_name, category_types,
-                 ideal_budget, ideal_monthly_sums_dict, diff_outs, disc_summary, this_year):
+                 ideal_budget, ideal_monthly_sums_dict, diff_outs, disc_summary, yearly_summary, this_year):
     """Write the updated budget to an Excel file"""
     writer = pd.ExcelWriter(xls_name)
 
@@ -86,8 +86,13 @@ def write_budget(budget_dict, projection_dict, initial_sheets, monthly_sums_dict
     df_out.to_excel(writer, sheet_name='Diffs', index=False, na_rep='')
     make_xls_pretty(writer, df_out, 'Diffs')
     df_disc = pd.DataFrame(disc_summary)
+    df_disc.sort_values('Category', inplace=True)
     df_disc.to_excel(writer, sheet_name='Q Summary', index=False, na_rep='')
     make_xls_pretty(writer, df_disc, 'Q Summary')
+    df_yearly = pd.DataFrame(yearly_summary)
+    df_yearly.sort_values('Category', inplace=True)
+    df_yearly.to_excel(writer, sheet_name='Y Summary', index=False, na_rep='')
+    make_xls_pretty(writer, df_yearly, 'Y Summary')
 
     # Recreate the initial sheets
     for dict_name, dict_initial in initial_sheets.items():
