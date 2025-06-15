@@ -75,7 +75,7 @@ def make_xls_pretty(writer, df, sheet_name, **kwargs):
         writer.sheets[sheet_name].set_column(col_idx, col_idx, column_length)
 
 
-def write_summary_sheet_with_links(writer, df, sheet_name):
+def write_summary_sheet_with_links(writer, df, sheet_name, nav_links=None, nav_col=None):
     """Writes a summary DataFrame to a sheet with hyperlinks for the Category column."""
     workbook = writer.book
     worksheet = workbook.add_worksheet(sheet_name)
@@ -102,6 +102,13 @@ def write_summary_sheet_with_links(writer, df, sheet_name):
                     worksheet.write_number(row_num, col_num, cell_data, num_format)
                 else:
                     worksheet.write(row_num, col_num, cell_data)
+
+    # Add navigation links if provided
+    if nav_links and nav_col:
+        for i, link_sheet in enumerate(nav_links, start=1):
+            cell = f'{nav_col}{i}'
+            url = f"internal:'{link_sheet}'!A1"
+            worksheet.write_url(cell, url, cell_format=url_format, string=link_sheet)
 
     # Auto-adjust column widths
     for i, col in enumerate(df.columns):
@@ -147,7 +154,7 @@ def write_sheet_with_all_category_links(writer, df, sheet_name, category_sheets)
         worksheet.set_column(i, i, column_len + 2)
 
 
-def write_projection_balances_with_links(writer, df):
+def write_projection_balances_with_links(writer, df, nav_links):
     """Writes the Projection Balances DataFrame to a sheet with a hyperlink for 'Ideal Budget'."""
     sheet_name = 'Projection Balances'
     workbook = writer.book
@@ -180,13 +187,6 @@ def write_projection_balances_with_links(writer, df):
                     worksheet.write(row_num, col_num, cell_data)
 
     # Add navigation links
-    nav_links = [
-        'Q Summary',
-        'Y Summary',
-        'Expenses',
-        'Categories',
-        'Projection Balances'
-    ]
     for i, link_sheet in enumerate(nav_links, start=1):
         cell = f'O{i}'
         url = f"internal:'{link_sheet}'!A1"
@@ -205,12 +205,12 @@ def write_budget(budget_dict, projection_dict, initial_sheets, monthly_sums_dict
                  ideal_budget, ideal_monthly_sums_dict, diff_outs, disc_summary, yearly_summary, this_year):
     """Write the updated budget to an Excel file"""
     writer = pd.ExcelWriter(xls_name, engine='xlsxwriter')
+    nav_links = ['Diffs', 'Q Summary', 'Y Summary', 'Expenses', 'Categories', 'Projection Balances']
 
     # Write out the diffs and the summary of quarters
     d_out = {'Category': list(diff_outs.keys()), 'Amount': [diff_outs[x] for x in diff_outs.keys()]}
     df_out = pd.DataFrame(d_out)
-    df_out.to_excel(writer, sheet_name='Diffs', index=False, na_rep='')
-    make_xls_pretty(writer, df_out, 'Diffs')
+    write_summary_sheet_with_links(writer, df_out, 'Diffs', nav_links=nav_links, nav_col='D')
     
     df_disc = pd.DataFrame(disc_summary)
     df_disc.sort_values('Category', inplace=True)
@@ -265,7 +265,7 @@ def write_budget(budget_dict, projection_dict, initial_sheets, monthly_sums_dict
     projection_balances['End of Year'].append('Ideal Budget')
     projection_balances['Balance'].append(ideal_budget['Balance'][-1])
     df_projection_balances = pd.DataFrame(projection_balances)
-    write_projection_balances_with_links(writer, df_projection_balances)
+    write_projection_balances_with_links(writer, df_projection_balances, nav_links)
 
     # Set the order of output
     categories = list(budget_dict.keys())
@@ -333,14 +333,6 @@ def write_budget(budget_dict, projection_dict, initial_sheets, monthly_sums_dict
             worksheet = writer.sheets[category]
             url_format = writer.book.add_format({'color': 'blue', 'underline': 1})
             
-            nav_links = [
-                'Q Summary',
-                'Y Summary',
-                'Expenses',
-                'Categories',
-                'Projection Balances'
-            ]
-            
             for i, link_sheet in enumerate(nav_links, start=1):
                 cell = f'O{i}'
                 url = f"internal:'{link_sheet}'!A1"
@@ -387,3 +379,54 @@ def finalize_monthly_dict(categories_organized, monthly_sums_dict):
         final_monthly_dict['Yearly'][c] = sums
 
     return final_monthly_dict
+
+
+def write_diffs_sheet_with_links(writer, df):
+    """Writes the Diffs DataFrame to a sheet with hyperlinks and navigation."""
+    sheet_name = 'Diffs'
+    workbook = writer.book
+    worksheet = workbook.add_worksheet(sheet_name)
+    writer.sheets[sheet_name] = worksheet
+
+    # Add formats
+    header_format = workbook.add_format({'bold': True, 'bottom': 1})
+    num_format = workbook.add_format({'num_format': '#,###.00'})
+    url_format = workbook.add_format({'color': 'blue', 'underline': 1})
+
+    # Write header
+    for col_num, value in enumerate(df.columns.values):
+        worksheet.write(0, col_num, value, header_format)
+
+    # Write data rows and create category hyperlinks
+    cat_col_idx = df.columns.get_loc('Category')
+    for row_num, row_data in enumerate(df.itertuples(index=False), 1):
+        for col_num, cell_data in enumerate(row_data):
+            if col_num == cat_col_idx:
+                url = f"internal:'{cell_data}'!A1"
+                worksheet.write_url(row_num, col_num, url, cell_format=url_format, string=cell_data)
+            else:
+                if isinstance(cell_data, (int, float)):
+                    worksheet.write_number(row_num, col_num, cell_data, num_format)
+                else:
+                    worksheet.write(row_num, col_num, cell_data)
+
+    # Add navigation links in column D
+    nav_links = [
+        'Q Summary',
+        'Y Summary',
+        'Expenses',
+        'Categories',
+        'Projection Balances'
+    ]
+    for i, link_sheet in enumerate(nav_links, start=1):
+        cell = f'D{i}'
+        url = f"internal:'{link_sheet}'!A1"
+        worksheet.write_url(cell, url, cell_format=url_format, string=link_sheet)
+
+    # Auto-adjust column widths
+    for i, col in enumerate(df.columns):
+        column_len = len(col)
+        max_len = df[col].astype(str).map(len).max()
+        if pd.notna(max_len):
+            column_len = max(column_len, max_len)
+        worksheet.set_column(i, i, column_len + 2)
