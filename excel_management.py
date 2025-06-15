@@ -75,24 +75,61 @@ def make_xls_pretty(writer, df, sheet_name, **kwargs):
         writer.sheets[sheet_name].set_column(col_idx, col_idx, column_length)
 
 
+def write_summary_sheet_with_links(writer, df, sheet_name):
+    """Writes a summary DataFrame to a sheet with hyperlinks for the Category column."""
+    workbook = writer.book
+    worksheet = workbook.add_worksheet(sheet_name)
+    writer.sheets[sheet_name] = worksheet
+
+    # Add formats
+    header_format = workbook.add_format({'bold': True, 'bottom': 1})
+    num_format = workbook.add_format({'num_format': '#,###.00'})
+    url_format = workbook.add_format({'color': 'blue', 'underline': 1})
+
+    # Write header
+    for col_num, value in enumerate(df.columns.values):
+        worksheet.write(0, col_num, value, header_format)
+
+    # Write data rows
+    cat_col_idx = df.columns.get_loc('Category')
+    for row_num, row_data in enumerate(df.itertuples(index=False), 1):
+        for col_num, cell_data in enumerate(row_data):
+            if col_num == cat_col_idx:
+                url = f"internal:'{cell_data}'!A1"
+                worksheet.write_url(row_num, col_num, url, cell_format=url_format, string=cell_data)
+            else:
+                if isinstance(cell_data, (int, float)):
+                    worksheet.write_number(row_num, col_num, cell_data, num_format)
+                else:
+                    worksheet.write(row_num, col_num, cell_data)
+
+    # Auto-adjust column widths
+    for i, col in enumerate(df.columns):
+        column_len = len(col)
+        max_len = df[col].astype(str).map(len).max()
+        if pd.notna(max_len):
+            column_len = max(column_len, max_len)
+        worksheet.set_column(i, i, column_len + 2)
+
+
 def write_budget(budget_dict, projection_dict, initial_sheets, monthly_sums_dict, xls_name, category_types,
                  ideal_budget, ideal_monthly_sums_dict, diff_outs, disc_summary, yearly_summary, this_year):
     """Write the updated budget to an Excel file"""
-    writer = pd.ExcelWriter(xls_name)
+    writer = pd.ExcelWriter(xls_name, engine='xlsxwriter')
 
     # Write out the diffs and the summary of quarters
     d_out = {'Category': list(diff_outs.keys()), 'Amount': [diff_outs[x] for x in diff_outs.keys()]}
     df_out = pd.DataFrame(d_out)
     df_out.to_excel(writer, sheet_name='Diffs', index=False, na_rep='')
     make_xls_pretty(writer, df_out, 'Diffs')
+    
     df_disc = pd.DataFrame(disc_summary)
     df_disc.sort_values('Category', inplace=True)
-    df_disc.to_excel(writer, sheet_name='Q Summary', index=False, na_rep='')
-    make_xls_pretty(writer, df_disc, 'Q Summary')
+    write_summary_sheet_with_links(writer, df_disc, 'Q Summary')
+
     df_yearly = pd.DataFrame(yearly_summary)
     df_yearly.sort_values('Category', inplace=True)
-    df_yearly.to_excel(writer, sheet_name='Y Summary', index=False, na_rep='')
-    make_xls_pretty(writer, df_yearly, 'Y Summary')
+    write_summary_sheet_with_links(writer, df_yearly, 'Y Summary')
 
     # Recreate the initial sheets
     for dict_name, dict_initial in initial_sheets.items():
@@ -176,16 +213,37 @@ def write_budget(budget_dict, projection_dict, initial_sheets, monthly_sums_dict
             else:
                 df.insert(loc=6, column=' ', value=['' for i in range(df.shape[0])])
 
+        sheet_created = False
         if 'Actual' in df.columns and 'Planned' in df.columns:
             p_sum = sum([abs(x) for x in df.Actual if x != '']) + sum([abs(x) for x in df.Planned if x != ''])
             if abs(p_sum) > 0.0:
                 df.to_excel(writer, sheet_name=category, index=False, na_rep='')
                 make_xls_pretty(writer, df, category)
+                sheet_created = True
             else:
                 print(f'This category budget is empty: {category}')
         else:
             df.to_excel(writer, sheet_name=category, index=False, na_rep='')
             make_xls_pretty(writer, df, category)
+            sheet_created = True
+
+        if sheet_created:
+            # Add navigation links to the sheet
+            worksheet = writer.sheets[category]
+            url_format = writer.book.add_format({'color': 'blue', 'underline': 1})
+            
+            nav_links = [
+                'Q Summary',
+                'Y Summary',
+                'Expenses',
+                'Categories',
+                'Projection Balances'
+            ]
+            
+            for i, link_sheet in enumerate(nav_links, start=1):
+                cell = f'O{i}'
+                url = f"internal:'{link_sheet}'!A1"
+                worksheet.write_url(cell, url, cell_format=url_format, string=link_sheet)
 
     writer.close()
 
