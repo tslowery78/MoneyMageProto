@@ -6,7 +6,7 @@ from utilities import remove_empty_rows
 from parse_budget import parse_budget
 from excel_management import write_budget
 from transactions import get_transactions
-from budget_functions import remove_budget_integers
+from budget_functions import remove_budget_integers, get_forward_budget
 from get_sums import get_monthly_sums
 from pandas.errors import ParserError
 import shutil
@@ -41,7 +41,7 @@ def update_budget(budget_xlsx, transactions, this_year):
 
     # Parse the budget
     excluded = ['Projection', 'Monthly', 'Expenses', 'Savings', 'Balances', 'Credit Card', 'Categories',
-                'Ideal Monthly', 'Ideal Projection', 'Projection Balances', 'Diffs', 'Q Summary', 'Y Summary']
+                'Ideal Monthly', 'Ideal Projection', 'Projection Balances', 'Diffs', 'Q Summary', 'Y Summary', 'Yearly Remaining']
     budgets = {}
     projections = {}
     forecasts = {}
@@ -154,12 +154,61 @@ def update_budget(budget_xlsx, transactions, this_year):
     ideal_budget, ideal_monthly_budget = find_ideal(projection_list)
     ideal_dict, ideal_monthly_sums_dict = make_projection_dict(ideal_budget, 0.0, this_year + 1)
 
+    # Calculate remaining expenses for the year
+    remaining_expenses = calculate_remaining_expenses(projections, forecasts, this_year)
+
     # Write out the updated budget
     b.close()
     write_budget(budgets, projection_dict, initial_sheets, monthly_sums_dict, budget_xlsx, category_types,
-                 ideal_dict, ideal_monthly_sums_dict, diff_outs, disc_summary, yearly_summary, this_year)
+                 ideal_dict, ideal_monthly_sums_dict, diff_outs, disc_summary, yearly_summary, remaining_expenses, this_year)
 
     pass
+
+
+def calculate_remaining_expenses(projections, forecasts, this_year):
+    """Function to calculate the remaining expenses for each category for the next 5 years."""
+    years = [this_year + i for i in range(6)]
+    
+    remaining_by_category = {'Category': []}
+    for year in years:
+        remaining_by_category[str(year)] = []
+        
+    all_categories = sorted(list(set(projections.keys()) | set(forecasts.keys())))
+    
+    excluded = ['Projection', 'Monthly', 'Expenses', 'Savings', 'Balances', 'Credit Card', 'Categories',
+                'Ideal Monthly', 'Ideal Projection', 'Projection Balances', 'Diffs', 'Q Summary', 'Y Summary', 'Yearly Remaining']
+
+    for category in all_categories:
+        if category in excluded:
+            continue
+            
+        remaining_by_category['Category'].append(category)
+        
+        # Current year - sum all projections for this year
+        proj = projections.get(category, [])
+        current_year_remaining = 0.0
+        future_year_remaining_by_year = {}
+        
+        for p in proj:
+            if len(p) >= 3 and hasattr(p[0], 'year') and isinstance(p[2], (int, float)):
+                if 'total for' not in p[1].lower():
+                    year_of_transaction = p[0].year
+                    if year_of_transaction == this_year:
+                        current_year_remaining += p[2]
+                    elif year_of_transaction > this_year:
+                        if year_of_transaction not in future_year_remaining_by_year:
+                            future_year_remaining_by_year[year_of_transaction] = 0.0
+                        future_year_remaining_by_year[year_of_transaction] += p[2]
+        
+        remaining_by_category[str(this_year)].append(current_year_remaining)
+
+        # Future years - use the projection data for future years
+        for i in range(5):
+            year = this_year + 1 + i
+            future_year_remaining = future_year_remaining_by_year.get(year, 0.0)
+            remaining_by_category[str(year)].append(future_year_remaining)
+            
+    return remaining_by_category
 
 
 def find_monthly_sums(projection_list, year):

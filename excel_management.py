@@ -305,10 +305,10 @@ def write_projection_balances_with_links(writer, df, nav_links, nav_col):
 
 
 def write_budget(budget_dict, projection_dict, initial_sheets, monthly_sums_dict, xls_name, category_types,
-                 ideal_budget, ideal_monthly_sums_dict, diff_outs, disc_summary, yearly_summary, this_year):
+                 ideal_budget, ideal_monthly_sums_dict, diff_outs, disc_summary, yearly_summary, remaining_expenses, this_year):
     """Write the updated budget to an Excel file"""
     writer = pd.ExcelWriter(xls_name, engine='xlsxwriter')
-    nav_links = ['Diffs', 'Q Summary', 'Y Summary', 'Expenses', 'Categories', 'Projection Balances']
+    nav_links = ['Diffs', 'Q Summary', 'Y Summary', 'Yearly Remaining', 'Expenses', 'Categories', 'Projection Balances']
 
     # Write out the diffs and the summary of quarters
     d_out = {'Category': list(diff_outs.keys()), 'Amount': [diff_outs[x] for x in diff_outs.keys()]}
@@ -322,6 +322,25 @@ def write_budget(budget_dict, projection_dict, initial_sheets, monthly_sums_dict
     df_yearly = pd.DataFrame(yearly_summary)
     df_yearly.sort_values('Category', inplace=True)
     write_summary_sheet_with_links(writer, df_yearly, 'Y Summary', nav_links=nav_links, nav_col='G')
+
+    # Create the Yearly Remaining sheet with 5-year projection
+    # Update the year columns to be programmatic (5 years ahead)
+    current_year = this_year
+    years_ahead = 5
+    remaining_expenses_with_programmatic_years = {'Category': remaining_expenses['Category']}
+    
+    for i in range(years_ahead):
+        year = current_year + i
+        year_key = str(year)
+        if year_key in remaining_expenses:
+            remaining_expenses_with_programmatic_years[str(year)] = remaining_expenses[year_key]
+        else:
+            # If the year doesn't exist in the data, fill with zeros
+            remaining_expenses_with_programmatic_years[str(year)] = [0.0] * len(remaining_expenses['Category'])
+    
+    df_remaining = pd.DataFrame(remaining_expenses_with_programmatic_years)
+    df_remaining.sort_values('Category', inplace=True)
+    write_summary_sheet_with_links(writer, df_remaining, 'Yearly Remaining', nav_links=nav_links, nav_col='H')
 
     # Recreate the initial sheets
     for dict_name, dict_initial in initial_sheets.items():
