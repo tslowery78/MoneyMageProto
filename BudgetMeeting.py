@@ -210,53 +210,68 @@ def calculate_remaining_expenses_from_sheets(budget_xlsx, category_types, this_y
             remaining_amount = 0.0
             
             if year == this_year:
-                # Current year: use remaining amounts if available
+                # Current year: multiple approaches to find remaining amounts
+                
+                # 1st Priority: Use 'Remaining' column if available
                 if 'Remaining' in df_category.columns:
                     remaining_values = df_category['Remaining'].dropna()
                     remaining_amount = sum([x for x in remaining_values if isinstance(x, (int, float))])
-                elif 'Payment' in df_category.columns and 'Date' in df_category.columns:
-                    # Fallback: calculate from future payments in current year
+                
+                # 2nd Priority: Calculate from current year entries only
+                elif 'Date' in df_category.columns:
                     df_category['Date'] = pd.to_datetime(df_category['Date'], errors='coerce')
                     current_year_mask = df_category['Date'].dt.year == year
-                    current_year_payments = df_category[current_year_mask]['Payment'].dropna()
-                    remaining_amount = sum([x for x in current_year_payments if isinstance(x, (int, float))])
+                    
+                    # Look for amount in Payment column first, then This Year column
+                    amount_column = None
+                    if 'Payment' in df_category.columns:
+                        amount_column = 'Payment'
+                    elif 'This Year' in df_category.columns:
+                        amount_column = 'This Year'
+                    
+                    if amount_column:
+                        current_year_payments = df_category[current_year_mask][amount_column].dropna()
+                        remaining_amount = sum([x for x in current_year_payments if isinstance(x, (int, float))])
+                
+                # 3rd Priority: Use 'This Year' column as fallback (only if no Date column)
+                elif 'This Year' in df_category.columns:
+                    this_year_values = df_category['This Year'].dropna()
+                    remaining_amount = sum([x for x in this_year_values if isinstance(x, (int, float))])
                 
             else:
-                # Future years: Priority order for finding future year expenses
+                # Future years: Combine baseline + specific year expenses
                 
-                # 1st Priority: Check for "Next Year" column (use for all future years)
+                # Start with baseline from "Next Year" column (regular annual expenses)
+                baseline_amount = 0.0
                 if 'Next Year' in df_category.columns:
                     next_year_values = df_category['Next Year'].dropna()
-                    next_year_total = sum([x for x in next_year_values if isinstance(x, (int, float))])
-                    if next_year_total != 0:
-                        remaining_amount = next_year_total
-                    
-                # 2nd Priority: Look for specific future year entries in Date/Payment columns
-                elif 'Date' in df_category.columns and 'Payment' in df_category.columns:
+                    baseline_amount = sum([x for x in next_year_values if isinstance(x, (int, float))])
+                
+                # Add any specific expenses for this year (major repairs, purchases, etc.)
+                specific_year_amount = 0.0
+                if 'Date' in df_category.columns:
                     # Convert Date column to datetime
                     df_category['Date'] = pd.to_datetime(df_category['Date'], errors='coerce')
                     
-                    # Get payments for this specific year
+                    # Get payments for this specific year from appropriate amount column
                     year_mask = df_category['Date'].dt.year == year
-                    year_payments = df_category[year_mask]['Payment'].dropna()
-                    future_year_amount = sum([x for x in year_payments if isinstance(x, (int, float))])
                     
-                    if future_year_amount != 0:
-                        remaining_amount = future_year_amount
-                    else:
-                        # 3rd Priority: Fallback to planning logic based on category type
-                        if is_monthly and 'Planned' in df_category.columns:
-                            # Monthly: use planned amounts
-                            planned_values = df_category['Planned'].dropna()
-                            remaining_amount = sum([x for x in planned_values if isinstance(x, (int, float))])
-                        elif is_quarterly and 'This Year' in df_category.columns:
-                            # Quarterly: use this year as template
-                            quarterly_values = df_category['This Year'].dropna()
-                            remaining_amount = sum([x for x in quarterly_values if isinstance(x, (int, float))])
-                        # For yearly categories, if no future entries, leave as 0
+                    # Look for amount in Payment column first, then This Year column
+                    amount_column = None
+                    if 'Payment' in df_category.columns:
+                        amount_column = 'Payment'
+                    elif 'This Year' in df_category.columns:
+                        amount_column = 'This Year'
+                    
+                    if amount_column:
+                        year_payments = df_category[year_mask][amount_column].dropna()
+                        specific_year_amount = sum([x for x in year_payments if isinstance(x, (int, float))])
                 
+                # Combine baseline + specific year expenses
+                if baseline_amount != 0 or specific_year_amount != 0:
+                    remaining_amount = baseline_amount + specific_year_amount
                 else:
-                    # 3rd Priority: Fallback to planning logic based on category type
+                    # Fallback to planning logic based on category type
                     if is_monthly and 'Planned' in df_category.columns:
                         # Monthly: use planned amounts
                         planned_values = df_category['Planned'].dropna()
