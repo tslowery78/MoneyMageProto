@@ -3,4 +3,8 @@ openpyxl==3.1.2
 xlsxwriter==3.1.2
 numpy==1.26.0
 matplotlib==3.8.3
-seaborn==0.13.2 
+seaborn==0.13.2
+schedule==1.2.0
+requests==2.31.0
+selenium==4.15.0
+webdriver-manager==4.0.1 

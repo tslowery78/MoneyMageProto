@@ -44,3 +44,31 @@ build/
 # Outputs
 plots/
 trade_journal.json
+
+# Sensitive Configuration Files
+plaid_config.json
+plaid_config_example.json
+config.json
+*.config.json
+
+# API credentials and tokens
+*.token
+*.key
+*.pem
+credentials.json
+
+# Test files
+test_*.html
+*_test.html
+plaid_link_*.html
+simulate_*.py
+test_plaid_*.py
+
+# Log files
+*.log
+logs/
+
+# Temporary files
+temp/
+tmp/
+*.tmp
