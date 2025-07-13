@@ -254,7 +254,7 @@ def write_sheet_with_nav_panel(writer, df, sheet_name, nav_links, nav_col):
         worksheet.set_column(i, i, column_len + 2)
 
 
-def write_quarterly_summary_sheet(writer, df, sheet_name, start_row, q_num, nav_links=None, nav_col=None):
+def write_quarterly_summary_sheet(writer, df, sheet_name, start_row, q_num):
     """Writes a quarterly summary DataFrame and its chart to a sheet."""
     workbook = writer.book
     worksheet = writer.sheets[sheet_name]
@@ -313,7 +313,7 @@ def write_quarterly_summary_sheet(writer, df, sheet_name, start_row, q_num, nav_
         chart.set_size({'width': 720, 'height': 576})
         
         chart_col = 'G'
-        worksheet.insert_chart(start_row, df.shape[1] + 2, chart)
+        worksheet.insert_chart(start_row, df.shape[1] + 3, chart)
 
 
 def write_projection_balances_with_links(writer, df, nav_links, nav_col):
@@ -383,6 +383,14 @@ def write_budget(budget_dict, projection_dict, initial_sheets, monthly_sums_dict
     worksheet = workbook.add_worksheet(q_summary_sheet_name)
     writer.sheets[q_summary_sheet_name] = worksheet
 
+    # Add navigation links
+    url_format = workbook.add_format({'color': 'blue', 'underline': 1})
+    nav_col = 'G'
+    for i, link_sheet in enumerate(nav_links, start=1):
+        cell = f'{nav_col}{i}'
+        url = f"internal:'{link_sheet}'!A1"
+        worksheet.write_url(cell, url, cell_format=url_format, string=link_sheet)
+
     # Calculate max column widths across all quarters first
     col_widths = {}
     all_q_dfs = []
@@ -405,7 +413,7 @@ def write_budget(budget_dict, projection_dict, initial_sheets, monthly_sums_dict
     for df_q in all_q_dfs:
         df_q.sort_values('Category', inplace=True)
         
-        write_quarterly_summary_sheet(writer, df_q, q_summary_sheet_name, start_row, q_num_counter, nav_links=nav_links, nav_col='G')
+        write_quarterly_summary_sheet(writer, df_q, q_summary_sheet_name, start_row, q_num_counter)
         start_row += 30  # Adjust spacing for next table/chart
         q_num_counter += 1
 
