@@ -123,20 +123,49 @@ def get_new_transactions():
     }
     print('here')
 
-    # Auto categorize
-    b = pd.ExcelFile('auto_categories.xlsx')
-    df_auto_cats = b.parse()
-    auto_cats = df_auto_cats.to_dict('list')
-    b.close()
-    auto_categorized = out_dict['Category']
-    for i, desc in enumerate(out_dict['Description']):
-        for a, auto_cat in enumerate(auto_cats['Category']):
-            if similar(desc, auto_cats['Description'][a]) > 0.7:
-                auto_categorized[i] = auto_cat
-                break
-    out_dict['Category'] = auto_categorized
-
     return out_dict
+
+
+def run_auto_categorization(transactions):
+    """Applies auto-categorization rules to uncategorized transactions."""
+    print("Running auto-categorization on all uncategorized transactions...")
+    try:
+        b = pd.ExcelFile('auto_categories.xlsx')
+        df_auto_cats = b.parse()
+        auto_cats = df_auto_cats.to_dict('list')
+        b.close()
+    except FileNotFoundError:
+        print("auto_categories.xlsx not found, skipping auto-categorization.")
+        return transactions
+
+    categorized_count = 0
+    auto_cat_descriptions_lower = [str(d).lower() for d in auto_cats['Description']]
+
+    for i, category in enumerate(transactions['Category']):
+        if str(category).lower() == 'uncategorized':
+            desc = transactions['Description'][i]
+            desc_lower = str(desc).lower()
+
+            # First, check for an exact match (case-insensitive)
+            try:
+                exact_match_index = auto_cat_descriptions_lower.index(desc_lower)
+                transactions['Category'][i] = auto_cats['Category'][exact_match_index]
+                categorized_count += 1
+                continue  # Move to the next transaction
+            except ValueError:
+                # No exact match found, proceed to similarity check
+                pass
+
+            # If no exact match, try similarity check
+            for a, auto_cat_desc in enumerate(auto_cats['Description']):
+                if similar(str(desc), str(auto_cat_desc)) > 0.7:
+                    transactions['Category'][i] = auto_cats['Category'][a]
+                    categorized_count += 1
+                    break  # Move to the next transaction once categorized
+    
+    if categorized_count > 0:
+        print(f"Auto-categorized {categorized_count} previously uncategorized transaction(s).")
+    return transactions
 
 
 def extract_chase_id(description):
@@ -301,10 +330,7 @@ def update_old_transactions(new_transactions, old_transactions):
     # Clean up split transactions BEFORE writing the file
     transactions = clean_split_transactions(transactions)
 
-    # Recreate the transactions xlsx with the updated transactions
-    write_transactions_xlsx(transactions.copy(), new_transactions)
-
-    return transactions
+    return transactions, new_transactions
 
 
 def get_old_transactions(transactions_xlsx):
@@ -361,7 +387,13 @@ def get_transactions(transactions_xlsx):
     f, old_transactions = get_old_transactions(transactions_xlsx)
 
     # Always attempt to update transactions, duplicate handling is done inside update_old_transactions
-    transactions = update_old_transactions(new_transactions.copy(), old_transactions)
+    transactions, new_transactions = update_old_transactions(new_transactions.copy(), old_transactions)
+
+    # Run auto-categorization on all transactions
+    transactions = run_auto_categorization(transactions)
+
+    # Recreate the transactions xlsx with the updated transactions
+    write_transactions_xlsx(transactions.copy(), new_transactions)
 
     return transactions
 
@@ -463,3 +495,35 @@ def clean_split_transactions(transactions):
     else:
         print("  No split transactions found to clean up")
         return transactions
+
+
+def update_auto_categories(transactions_xlsx='transactions.xlsx', auto_categories_xlsx='auto_categories.xlsx'):
+    import pandas as pd
+    import os
+
+    # Read transactions
+    df_trans = pd.read_excel(transactions_xlsx, sheet_name='Transactions')
+
+    # Filter reconciled and categorized
+    df_filtered = df_trans[(df_trans['R'] == 'x') & (df_trans['Category'] != 'uncategorized')]
+
+    # Get unique Description, Category pairs
+    unique_pairs = df_filtered[['Description', 'Category']].drop_duplicates()
+
+    # Read existing auto_categories or create empty
+    if os.path.exists(auto_categories_xlsx):
+        df_auto = pd.read_excel(auto_categories_xlsx)
+    else:
+        df_auto = pd.DataFrame(columns=['Description', 'Category'])
+
+    # Find new pairs not in existing
+    df_merged = unique_pairs.merge(df_auto, on=['Description', 'Category'], how='left', indicator=True)
+    df_new = df_merged[df_merged['_merge'] == 'left_only'][['Description', 'Category']]
+
+    # If there are new pairs, append them
+    if not df_new.empty:
+        df_updated = pd.concat([df_auto, df_new], ignore_index=True)
+        df_updated.to_excel(auto_categories_xlsx, index=False)
+        print(f'Added {len(df_new)} new unique pairs to {auto_categories_xlsx}')
+    else:
+        print('No new unique pairs to add')

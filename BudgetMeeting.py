@@ -5,7 +5,7 @@ import pandas as pd
 from utilities import remove_empty_rows
 from parse_budget import parse_budget
 from excel_management import write_budget
-from transactions import get_transactions
+from transactions import get_transactions, update_auto_categories
 from budget_functions import remove_budget_integers, get_forward_budget
 from get_sums import get_monthly_sums
 from pandas.errors import ParserError
@@ -361,6 +361,10 @@ def BudgetMeeting(budget_xlsx, transactions_xlsx, this_year):
 
     # Update the budget with the latest transactions
     update_budget(budget_xlsx, transactions, this_year)
+
+    # Update auto categories
+    print("Updating auto-categorization rules...")
+    update_auto_categories(transactions_xlsx=transactions_xlsx)
     
     print("Budget update complete.")
 
