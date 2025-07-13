@@ -97,8 +97,9 @@ def update_budget(budget_xlsx, transactions, this_year):
     differences = {}
     quarterly_months = [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]
     i_month = datetime.datetime.today().month
-    i_quarter = [i for i, x in enumerate(quarterly_months) if i_month in x][0]
-    disc_summary = {'Category': [], 'Planned': [], 'Spent': [], 'Remaining': []}
+    
+    q_summary_data = {1: [], 2: [], 3: [], 4: []}
+    
     yearly_summary = {'Category': [], 'Planned': [], 'Spent': [], 'Remaining': []}
     for category in categories:
         if category in excluded:
@@ -112,15 +113,27 @@ def update_budget(budget_xlsx, transactions, this_year):
             yearly_summary['Spent'].append(sum([x for x in budgets[category].get('Actual', []) if isinstance(x, (int, float))]))
             yearly_summary['Remaining'].append(sum([x for x in budgets[category].get('Remaining', []) if isinstance(x, (int, float))]))
         elif category in category_types['Quarterly']:
-            disc_summary['Category'].append(category)
-            disc_summary['Planned'].append(budgets[category]['This Year'][i_quarter])
-            disc_summary['Spent'].append(budgets[category]['Spent'][i_quarter])
-            disc_summary['Remaining'].append(budgets[category]['Remaining'][i_quarter])
+            for i in range(4):
+                q_summary_data[i+1].append({
+                    'Category': category,
+                    'Planned': budgets[category]['This Year'][i],
+                    'Spent': budgets[category]['Spent'][i],
+                    'Remaining': budgets[category]['Remaining'][i]
+                })
         elif category in category_types['Monthly']:
-            disc_summary['Category'].append(category)
-            disc_summary['Planned'].append(budgets[category]['Planned'][i_month-1])
-            disc_summary['Spent'].append(budgets[category]['Spent'][i_month-1])
-            disc_summary['Remaining'].append(budgets[category]['Remaining'][i_month-1])
+            for i in range(4):
+                q_months = quarterly_months[i]
+                
+                planned = sum(budgets[category]['Planned'][m-1] for m in q_months)
+                spent = sum(budgets[category]['Spent'][m-1] for m in q_months)
+                remaining = sum(budgets[category]['Remaining'][m-1] for m in q_months)
+                
+                q_summary_data[i+1].append({
+                    'Category': category,
+                    'Planned': planned,
+                    'Spent': spent,
+                    'Remaining': remaining
+                })
         else:
             differences[category] = sum([x for x in budgets[category]['Difference'] if isinstance(x, float)])
     diff_outs = {}
@@ -160,7 +173,7 @@ def update_budget(budget_xlsx, transactions, this_year):
     # Write out the updated budget
     b.close()
     write_budget(budgets, projection_dict, initial_sheets, monthly_sums_dict, budget_xlsx, category_types,
-                 ideal_dict, ideal_monthly_sums_dict, diff_outs, disc_summary, yearly_summary, remaining_expenses, this_year)
+                 ideal_dict, ideal_monthly_sums_dict, diff_outs, q_summary_data, yearly_summary, remaining_expenses, this_year)
 
     pass
 

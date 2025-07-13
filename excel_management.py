@@ -254,6 +254,68 @@ def write_sheet_with_nav_panel(writer, df, sheet_name, nav_links, nav_col):
         worksheet.set_column(i, i, column_len + 2)
 
 
+def write_quarterly_summary_sheet(writer, df, sheet_name, start_row, q_num, nav_links=None, nav_col=None):
+    """Writes a quarterly summary DataFrame and its chart to a sheet."""
+    workbook = writer.book
+    worksheet = writer.sheets[sheet_name]
+
+    # Add formats
+    header_format = workbook.add_format({'bold': True, 'bottom': 1, 'align': 'center'})
+    num_format = workbook.add_format({'num_format': '#,###.00'})
+    url_format = workbook.add_format({'color': 'blue', 'underline': 1})
+    title_format = workbook.add_format({'bold': True, 'font_size': 14, 'align': 'center'})
+    
+    # Quarter title
+    worksheet.merge_range(start_row, 0, start_row, 3, f'Quarter {q_num} Summary', title_format)
+    start_row += 1
+
+    # Write header
+    for col_num, value in enumerate(df.columns.values):
+        worksheet.write(start_row, col_num, value, header_format)
+
+    # Write data rows
+    cat_col_idx = df.columns.get_loc('Category')
+    for row_num, row_data in enumerate(df.itertuples(index=False), start_row + 1):
+        for col_num, cell_data in enumerate(row_data):
+            if col_num == cat_col_idx:
+                url = f"internal:'{cell_data}'!A1"
+                worksheet.write_url(row_num, col_num, url, cell_format=url_format, string=cell_data)
+            else:
+                if isinstance(cell_data, (int, float)):
+                    worksheet.write_number(row_num, col_num, cell_data, num_format)
+                else:
+                    worksheet.write(row_num, col_num, cell_data)
+
+    # Add a bar chart
+    if 'Planned' in df.columns and 'Spent' in df.columns and not df.empty:
+        chart = workbook.add_chart({'type': 'column'})
+        num_rows = len(df)
+        
+        cat_col_idx = df.columns.get_loc('Category')
+        plan_col_idx = df.columns.get_loc('Planned')
+        spent_col_idx = df.columns.get_loc('Spent')
+
+        categories_ref = f"='{sheet_name}'!${xl_col_to_name(cat_col_idx)}${start_row + 2}:${xl_col_to_name(cat_col_idx)}${start_row + num_rows + 1}"
+        planned_ref = f"='{sheet_name}'!${xl_col_to_name(plan_col_idx)}${start_row + 2}:${xl_col_to_name(plan_col_idx)}${start_row + num_rows + 1}"
+        spent_ref = f"='{sheet_name}'!${xl_col_to_name(spent_col_idx)}${start_row + 2}:${xl_col_to_name(spent_col_idx)}${start_row + num_rows + 1}"
+        
+        chart.add_series({
+            'name': 'Planned', 'categories': categories_ref, 'values': planned_ref,
+            'fill': {'color': 'green'},
+        })
+        chart.add_series({
+            'name': 'Spent', 'values': spent_ref, 'fill': {'color': 'red'},
+        })
+        
+        chart.set_title({'name': f'Quarter {q_num} Planned vs. Spent'})
+        chart.set_x_axis({'name': 'Category', 'text_axis': True, 'num_font': {'rotation': 45}})
+        chart.set_y_axis({'name': 'Amount ($)'})
+        chart.set_size({'width': 720, 'height': 576})
+        
+        chart_col = 'G'
+        worksheet.insert_chart(start_row, df.shape[1] + 2, chart)
+
+
 def write_projection_balances_with_links(writer, df, nav_links, nav_col):
     """Writes the Projection Balances DataFrame to a sheet with a hyperlink for 'Ideal Budget'."""
     sheet_name = 'Projection Balances'
@@ -305,7 +367,7 @@ def write_projection_balances_with_links(writer, df, nav_links, nav_col):
 
 
 def write_budget(budget_dict, projection_dict, initial_sheets, monthly_sums_dict, xls_name, category_types,
-                 ideal_budget, ideal_monthly_sums_dict, diff_outs, disc_summary, yearly_summary, remaining_expenses, this_year):
+                 ideal_budget, ideal_monthly_sums_dict, diff_outs, q_summary_data, yearly_summary, remaining_expenses, this_year):
     """Write the updated budget to an Excel file"""
     writer = pd.ExcelWriter(xls_name, engine='xlsxwriter')
     nav_links = ['Diffs', 'Q Summary', 'Y Summary', 'Yearly Remaining', 'Expenses', 'Categories', 'Projection Balances']
@@ -315,9 +377,37 @@ def write_budget(budget_dict, projection_dict, initial_sheets, monthly_sums_dict
     df_out = pd.DataFrame(d_out)
     write_summary_sheet_with_links(writer, df_out, 'Diffs', nav_links=nav_links, nav_col='E')
     
-    df_disc = pd.DataFrame(disc_summary)
-    df_disc.sort_values('Category', inplace=True)
-    write_summary_sheet_with_links(writer, df_disc, 'Q Summary', nav_links=nav_links, nav_col='G')
+    # Prepare Q Summary sheet
+    q_summary_sheet_name = 'Q Summary'
+    workbook = writer.book
+    worksheet = workbook.add_worksheet(q_summary_sheet_name)
+    writer.sheets[q_summary_sheet_name] = worksheet
+
+    # Calculate max column widths across all quarters first
+    col_widths = {}
+    all_q_dfs = []
+    for q_num, data in q_summary_data.items():
+        if not data:
+            continue
+        df_q = pd.DataFrame(data)
+        all_q_dfs.append(df_q)
+        for i, col in enumerate(df_q.columns):
+            max_len = max(df_q[col].astype(str).map(len).max(), len(col))
+            if pd.notna(max_len):
+                col_widths[i] = max(col_widths.get(i, 0), max_len)
+
+    # Set column widths once for the entire sheet
+    for i, width in col_widths.items():
+        worksheet.set_column(i, i, width + 2)
+    
+    start_row = 0
+    q_num_counter = 1
+    for df_q in all_q_dfs:
+        df_q.sort_values('Category', inplace=True)
+        
+        write_quarterly_summary_sheet(writer, df_q, q_summary_sheet_name, start_row, q_num_counter, nav_links=nav_links, nav_col='G')
+        start_row += 30  # Adjust spacing for next table/chart
+        q_num_counter += 1
 
     df_yearly = pd.DataFrame(yearly_summary)
     df_yearly.sort_values('Category', inplace=True)
