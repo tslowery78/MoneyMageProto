@@ -12,11 +12,11 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 import requests
 from dataclasses import dataclass
+import argparse
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from transactions import update_old_transactions, get_old_transactions
 from excel_management import write_transactions_xlsx
 
 
@@ -153,7 +153,7 @@ class PlaidTransactionFetcher:
         
         try:
             response = requests.post(
-                f"{self.base_url}/link/token/exchange",
+                f"{self.base_url}/item/public_token/exchange",
                 json=request_data,
                 headers=self.headers
             )
@@ -250,133 +250,109 @@ class PlaidTransactionFetcher:
             amount = -transaction['amount']  # Flip the sign
             converted_transactions['Amount'].append(amount)
             
-            # Get account name from mapping
-            account_id = transaction['account_id']
-            account_name = account_mapping.get(account_id, f"plaid_account_{account_id[:8]}")
-            converted_transactions['Account'].append(account_name)
-            
-            # Get description
-            description = transaction.get('name', 'Unknown Transaction')
-            converted_transactions['Description'].append(description)
-            
-            # Set category as uncategorized (will be auto-categorized later)
+            # Use a default category for now
             converted_transactions['Category'].append('uncategorized')
             
-            # Empty R and Notes fields
+            # Map Plaid account ID to internal account name
+            account_name = account_mapping.get(transaction['account_id'], 'unknown_account')
+            converted_transactions['Account'].append(account_name)
+            
+            # Use merchant name or name as description
+            description = transaction.get('merchant_name') or transaction.get('name')
+            converted_transactions['Description'].append(description)
+            
+            # Add placeholders for 'R' and 'Notes'
             converted_transactions['R'].append('')
             converted_transactions['Notes'].append('')
-        
+            
         return converted_transactions
-    
-    def fetch_and_process_transactions(self, days_back: int = 30) -> bool:
-        """Fetch transactions from all configured accounts and process them"""
-        # Load full config with access tokens
-        with open(self.config_file, 'r') as f:
-            full_config = json.load(f)
+
+    def fetch_new_transactions(self, days_back: int = 30) -> Optional[Dict[str, List]]:
+        """
+        Fetch new transactions from Plaid for all configured accounts.
+        Returns a dictionary of new transactions if successful, otherwise None.
+        """
+        self.logger.info("Starting new transaction fetch from Plaid...")
         
-        access_tokens = full_config.get('access_tokens', {})
-        account_mapping = full_config.get('account_mapping', {})
+        try:
+            with open(self.config_file, 'r') as f:
+                config_data = json.load(f)
+            access_tokens = config_data.get("access_tokens", {})
+            account_mapping = config_data.get("account_mapping", {})
+        except FileNotFoundError:
+            self.logger.error(f"Config file not found at {self.config_file}")
+            self.create_default_config({})
+            return None
         
         if not access_tokens:
-            self.logger.error("No access tokens found. Please run setup first.")
-            return False
+            self.logger.warning("No access tokens found in config. Cannot fetch transactions.")
+            return None
         
-        # Date range for fetching transactions
+        all_new_transactions = {
+            'Date': [], 'Amount': [], 'Category': [], 'Account': [],
+            'Description': [], 'R': [], 'Notes': []
+        }
+        
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days_back)
         
-        all_transactions = {
-            'Date': [],
-            'Amount': [],
-            'Category': [],
-            'Account': [],
-            'Description': [],
-            'R': [],
-            'Notes': []
-        }
-        
-        # Fetch transactions from each account
         for account_name, access_token in access_tokens.items():
-            try:
-                self.logger.info(f"Fetching transactions for account: {account_name}")
-                
-                # Get account IDs first
-                accounts = self.get_accounts(access_token)
-                if not accounts:
-                    self.logger.warning(f"No accounts found for {account_name}")
-                    continue
-                
-                # Get transactions
-                transactions = self.get_transactions(access_token, start_date, end_date)
-                
-                if transactions:
-                    self.logger.info(f"Found {len(transactions)} transactions for {account_name}")
-                    
-                    # Convert to MoneyMage format
-                    converted = self.convert_plaid_to_moneymage_format(transactions, account_mapping)
-                    
-                    # Merge with all transactions
-                    for key in all_transactions.keys():
-                        all_transactions[key].extend(converted[key])
-                else:
-                    self.logger.info(f"No transactions found for {account_name}")
-                    
-            except Exception as e:
-                self.logger.error(f"Error processing account {account_name}: {e}")
-                continue
-        
-        if not all_transactions['Date']:
-            self.logger.info("No transactions found from any account")
-            return True
-        
-        # Process transactions through existing MoneyMage logic
-        try:
-            # Get old transactions
-            _, old_transactions = get_old_transactions('transactions.xlsx')
+            self.logger.info(f"Fetching transactions for {account_name}...")
+            plaid_transactions = self.get_transactions(access_token, start_date, end_date)
             
-            # Update with new transactions
-            updated_transactions = update_old_transactions(all_transactions, old_transactions)
+            if plaid_transactions:
+                new_trans = self.convert_plaid_to_moneymage_format(plaid_transactions, account_mapping)
+                for key in all_new_transactions:
+                    all_new_transactions[key].extend(new_trans[key])
+        
+        if not all_new_transactions['Date']:
+            self.logger.info("No new transactions fetched from Plaid.")
+            return None
+
+        self.logger.info(f"Successfully fetched {len(all_new_transactions['Date'])} new transactions from Plaid.")
+        return all_new_transactions
+
+    def setup_account_link(self, account_name: str, user_id: str = "default_user") -> Optional[str]:
+        """Initiate Plaid Link for a new account and return the link_token."""
+        self.logger.info(f"Setting up new account link for '{account_name}'")
+        link_token = self.create_link_token(user_id=user_id)
+        
+        if link_token:
+            self.logger.info(f"Link token created for account '{account_name}': {link_token}")
+            print(f"\nLink token created: {link_token}\n")
+            print("To complete the setup:")
+            print("1. Open plaid_link.html in a web browser.")
+            print("2. Use this link token in Plaid Link to connect your bank account.")
+            print("3. After successful connection, you'll receive a public token.")
+            print("4. Paste the public token back here when prompted.")
+        else:
+            self.logger.error("Failed to create link token.")
             
-            self.logger.info(f"Successfully processed {len(all_transactions['Date'])} transactions from Plaid")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Error processing transactions: {e}")
-            return False
-    
-    def setup_account_link(self, account_name: str, user_id: str = "default_user") -> str:
-        """Setup account linking - returns link token for frontend"""
-        if not self.config.client_id or not self.config.secret:
-            raise ValueError("Plaid credentials not configured. Please update plaid_config.json")
-        
-        link_token = self.create_link_token(user_id)
-        if not link_token:
-            raise RuntimeError("Failed to create link token")
-        
-        print(f"Link token created for account '{account_name}': {link_token}")
-        print("\nTo complete the setup:")
-        print("1. Use this link token in Plaid Link to connect your bank account")
-        print("2. After successful connection, you'll receive a public token")
-        print("3. Run: python plaid_integration.py --save-token <account_name> <public_token>")
-        
         return link_token
-    
+
     def save_access_token(self, account_name: str, public_token: str) -> bool:
-        """Save access token after successful bank connection"""
+        """Exchange public token for access token and save to config."""
+        self.logger.info(f"Exchanging public token for access token for account '{account_name}'")
         access_token = self.exchange_public_token(public_token)
+        
         if not access_token:
-            self.logger.error("Failed to exchange public token for access token")
+            self.logger.error("Could not retrieve access token.")
             return False
+            
+        self.logger.info(f"Successfully received access token for '{account_name}'.")
         
-        # Load existing config
-        with open(self.config_file, 'r') as f:
-            config_data = json.load(f)
+        # Load existing config data
+        try:
+            with open(self.config_file, 'r') as f:
+                config_data = json.load(f)
+        except (IOError, json.JSONDecodeError) as e:
+            self.logger.warning(f"Could not read config file, creating a new one. Error: {e}")
+            config_data = {}
         
-        # Add access token
-        if 'access_tokens' not in config_data:
-            config_data['access_tokens'] = {}
-        
-        config_data['access_tokens'][account_name] = access_token
+        # Update and save access token
+        if "access_tokens" not in config_data:
+            config_data["access_tokens"] = {}
+        config_data["access_tokens"][account_name] = access_token
         
         # Get account information for mapping
         accounts = self.get_accounts(access_token)
@@ -386,70 +362,71 @@ class PlaidTransactionFetcher:
             
             for account in accounts:
                 account_id = account['account_id']
-                account_desc = f"{account['name']} ({account['subtype']})"
+                account_desc = f"{account['name']} ({account.get('subtype', 'N/A')})"
                 config_data['account_mapping'][account_id] = account_desc
-                print(f"Added account mapping: {account_id} -> {account_desc}")
-        
-        # Save updated config
-        with open(self.config_file, 'w') as f:
-            json.dump(config_data, f, indent=2)
-        
-        self.logger.info(f"Successfully saved access token for account: {account_name}")
-        return True
+                self.logger.info(f"Added account mapping: {account_id} -> {account_desc}")
 
+        try:
+            with open(self.config_file, 'w') as f:
+                json.dump(config_data, f, indent=2)
+            self.logger.info(f"Access token for '{account_name}' saved to {self.config_file}")
+            return True
+        except IOError as e:
+            self.logger.error(f"Error writing to config file: {e}")
+            return False
 
 def main():
-    """Main function for command-line usage"""
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='MoneyMage Plaid Integration')
-    parser.add_argument('--setup', type=str, help='Setup new account link (provide account name)')
-    parser.add_argument('--save-token', nargs=2, metavar=('ACCOUNT_NAME', 'PUBLIC_TOKEN'),
-                        help='Save access token after bank connection')
-    parser.add_argument('--fetch', type=int, default=30, metavar='DAYS',
-                        help='Fetch transactions from last N days (default: 30)')
-    parser.add_argument('--list-accounts', action='store_true',
-                        help='List configured accounts')
+    """Main entry point"""
+    parser = argparse.ArgumentParser(description="Plaid Integration for MoneyMage")
+    parser.add_argument(
+        "--add-bank",
+        metavar="ACCOUNT_NAME",
+        type=str,
+        help="Add a new bank account. Provide a friendly name for the account."
+    )
+    parser.add_argument(
+        "--fetch",
+        action="store_true",
+        help="Fetch new transactions from all linked accounts."
+    )
+    parser.add_argument(
+        "--days",
+        type=int,
+        default=30,
+        help="Number of days back to fetch transactions for. Default is 30."
+    )
     
     args = parser.parse_args()
-    
     fetcher = PlaidTransactionFetcher()
+
+    if args.add_bank:
+        account_name = args.add_bank
+        link_token = fetcher.setup_account_link(account_name)
+        
+        if link_token:
+            public_token = input("--> Paste the public_token here and press Enter: ").strip()
+            if public_token:
+                if fetcher.save_access_token(account_name, public_token):
+                    print("\nNew bank account added successfully!")
+                    print("You can now fetch transactions using the --fetch flag.")
+                else:
+                    print("\nFailed to save the access token. Please try again.")
+            else:
+                print("\nNo public_token provided. Aborting.")
     
-    if args.setup:
-        try:
-            link_token = fetcher.setup_account_link(args.setup)
-            print(f"Setup initiated for account: {args.setup}")
-        except Exception as e:
-            print(f"Error setting up account: {e}")
-    
-    elif args.save_token:
-        account_name, public_token = args.save_token
-        if fetcher.save_access_token(account_name, public_token):
-            print(f"Successfully configured account: {account_name}")
+    elif args.fetch:
+        print(f"Fetching transactions for the last {args.days} days...")
+        all_transactions = fetcher.fetch_new_transactions(days_back=args.days)
+        
+        if all_transactions and any(len(tx_list) > 0 for tx_list in all_transactions.values() if isinstance(tx_list, list)):
+            output_file = "transactions.xlsx"
+            write_transactions_xlsx(all_transactions, output_file)
+            print(f"Transactions saved to {output_file}")
         else:
-            print(f"Failed to configure account: {account_name}")
-    
-    elif args.list_accounts:
-        try:
-            with open(fetcher.config_file, 'r') as f:
-                config_data = json.load(f)
-            
-            access_tokens = config_data.get('access_tokens', {})
-            print("Configured accounts:")
-            for account_name in access_tokens.keys():
-                print(f"  - {account_name}")
-        except Exception as e:
-            print(f"Error listing accounts: {e}")
-    
+            print("No new transactions found.")
     else:
-        # Fetch transactions
-        print(f"Fetching transactions from last {args.fetch} days...")
-        success = fetcher.fetch_and_process_transactions(args.fetch)
-        if success:
-            print("Transaction fetch completed successfully")
-        else:
-            print("Transaction fetch failed")
+        parser.print_help()
 
 
 if __name__ == "__main__":
-    main() 
+    main()

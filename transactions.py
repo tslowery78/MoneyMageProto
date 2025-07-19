@@ -6,6 +6,7 @@ from excel_management import write_transactions_xlsx
 import glob
 from itertools import combinations
 import re
+from plaid_integration import PlaidTransactionFetcher
 
 
 def get_new_transactions():
@@ -380,8 +381,21 @@ def get_old_transactions(transactions_xlsx):
 def get_transactions(transactions_xlsx):
     """Function to get the transactions for the budget"""
 
-    # Get the new transactions from bank transactions downloads
-    new_transactions = get_new_transactions()
+    new_transactions = None
+    # Try to use Plaid first
+    plaid_fetcher = PlaidTransactionFetcher()
+    if plaid_fetcher.config.client_id and plaid_fetcher.config.secret:
+        print("Plaid config found, attempting to fetch transactions from Plaid.")
+        new_transactions = plaid_fetcher.fetch_new_transactions(days_back=90)
+        if new_transactions:
+            print(f"Plaid fetch successful, found {len(new_transactions['Date'])} new transactions.")
+        else:
+            print("Plaid fetch completed but found no new transactions.")
+
+    if not new_transactions:
+        print("Plaid not used or fetch failed, falling back to CSV imports.")
+        # Get the new transactions from bank transactions downloads
+        new_transactions = get_new_transactions()
 
     # Get the old transactions from the transactions xlsx
     f, old_transactions = get_old_transactions(transactions_xlsx)

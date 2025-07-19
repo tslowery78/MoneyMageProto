@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Plaid Link</title>
+    <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+</head>
+<body style="font-family: sans-serif; text-align: center; padding: 2rem;">
+    <h1>Plaid Link Helper</h1>
+    <p>Paste your link_token below and click the button to connect your account.</p>
+    
+    <textarea id="link-token-input" rows="4" cols="80" style="margin-bottom: 1rem; font-family: monospace; font-size: 12px;">PASTE_YOUR_LINK_TOKEN_HERE</textarea>
+    
+    <br/>
+
+    <button id="link-button" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Connect a Bank Account</button>
+    
+    <div id="results" style="margin-top: 2rem; text-align: left; display: inline-block;"></div>
+
+    <script>
+        document.getElementById('link-button').onclick = function() {
+            const linkToken = document.getElementById('link-token-input').value.trim();
+            if (!linkToken || linkToken === 'PASTE_YOUR_LINK_TOKEN_HERE') {
+                alert('Please paste your link_token first.');
+                return;
+            }
+
+            const handler = Plaid.create({
+                token: linkToken,
+                onSuccess: (public_token, metadata) => {
+                    const resultsDiv = document.getElementById('results');
+                    resultsDiv.innerHTML = `
+                        <h2>Success!</h2>
+                        <p>Your account has been linked.</p>
+                        <p><strong>Public Token:</strong></p>
+                        <pre style="background-color: #f0f0f0; padding: 1rem; border: 1px solid #ccc; word-wrap: break-word;">${public_token}</pre>
+                        <p>Please copy this public_token and return to your terminal.</p>
+                    `;
+                    console.log('Public Token: ' + public_token);
+                    console.log('Metadata: ', metadata);
+                },
+                onExit: (err, metadata) => {
+                    if (err) {
+                        console.error(err);
+                        document.getElementById('results').innerHTML = `<p><strong>Error:</strong> ${err.error_message}</p>`;
+                    }
+                }
+            });
+
+            handler.open();
+        };
+    </script>
+</body>
+</html> 
