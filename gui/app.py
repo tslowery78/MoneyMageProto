@@ -84,6 +84,71 @@ def read_sheet(xlsx_path: str, sheet_name: str) -> pd.DataFrame | None:
         return None
 
 
+def read_q_summary_sections(xlsx_path: str) -> dict[int, pd.DataFrame] | None:
+    """Parse the 'Q Summary' sheet into 4 separate quarter DataFrames.
+
+    The writer lays out sections as blocks with a title row 'Quarter X Summary',
+    followed by a header row ['Category','Planned','Spent','Remaining'], then rows.
+    """
+    try:
+        raw = pd.read_excel(xlsx_path, sheet_name='Q Summary', header=None)
+    except Exception:
+        return None
+
+    sections: dict[int, pd.DataFrame] = {}
+    i = 0
+    n = len(raw)
+    while i < n:
+        cell = raw.iat[i, 0] if 0 in raw.columns else None
+        if isinstance(cell, str) and cell.strip().startswith('Quarter'):
+            # Extract quarter number
+            try:
+                q_num = int(cell.split()[1])
+            except Exception:
+                q_num = None
+            # Header is next row
+            header_row = i + 1
+            if header_row < n:
+                headers = raw.iloc[header_row].tolist()
+                # Collect data rows until next title or empty header repeat
+                data_start = header_row + 1
+                data_rows = []
+                r = data_start
+                while r < n:
+                    first = raw.iat[r, 0] if 0 in raw.columns else None
+                    # Stop if next section title encountered
+                    if isinstance(first, str) and first.strip().startswith('Quarter'):
+                        break
+                    # Stop if completely empty row
+                    if pd.isna(first) and all(pd.isna(x) for x in raw.iloc[r].tolist()):
+                        break
+                    data_rows.append(raw.iloc[r].tolist())
+                    r += 1
+                if q_num is not None and headers:
+                    df = pd.DataFrame(data_rows, columns=[str(h) for h in headers])
+                    # Trim to expected columns if present
+                    keep = [c for c in ['Category', 'Planned', 'Spent', 'Remaining'] if c in df.columns]
+                    df = df[keep] if keep else df
+                    # Drop rows with all NaNs in numeric cols
+                    for col in ['Planned', 'Spent', 'Remaining']:
+                        if col in df.columns:
+                            df[col] = pd.to_numeric(df[col], errors='coerce')
+                    if any(c in df.columns for c in ['Planned', 'Spent', 'Remaining']):
+                        mask = None
+                        for col in ['Planned', 'Spent', 'Remaining']:
+                            if col in df.columns:
+                                mask = df[col].notna() if mask is None else (mask | df[col].notna())
+                        if mask is not None:
+                            df = df[mask]
+                    sections[q_num] = df.reset_index(drop=True)
+                i = r
+                continue
+        i += 1
+
+    # Ensure we return quarters 1..4 keys if found
+    return sections if sections else None
+
+
 def show_top_spending_chart(transactions_xlsx: str, top_n: int = 10):
     if not file_exists(transactions_xlsx):
         st.info("Transactions file not found.")
@@ -318,11 +383,55 @@ def main():
 
     # Quarterly
     with tabs[2]:
-        df = read_sheet(budget_to_view, "Q Summary")
-        if df is not None and not df.empty:
-            st.dataframe(sanitize_df_for_streamlit(df), use_container_width=True)
+        st.subheader("Quarterly Overview")
+        # Try to parse into separate quarters
+        q_sections = read_q_summary_sections(budget_to_view)
+        if q_sections:
+            q_tabs = st.tabs([f"Q{q}" for q in sorted(q_sections.keys())])
+            for idx, q in enumerate(sorted(q_sections.keys())):
+                with q_tabs[idx]:
+                    qdf = q_sections[q]
+                    if qdf is None or qdf.empty:
+                        st.info(f"No data for Q{q}.")
+                        continue
+                    # KPIs
+                    planned = qdf['Planned'].sum() if 'Planned' in qdf.columns else 0.0
+                    spent = qdf['Spent'].sum() if 'Spent' in qdf.columns else 0.0
+                    remaining = qdf['Remaining'].sum() if 'Remaining' in qdf.columns else planned - spent
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Total Planned", f"${planned:,.0f}")
+                    c2.metric("Total Spent", f"${spent:,.0f}")
+                    c3.metric("Remaining", f"${remaining:,.0f}")
+
+                    # Leaderboard table
+                    st.markdown("#### Categories")
+                    # Add variance column if possible
+                    if all(c in qdf.columns for c in ['Planned', 'Spent']):
+                        qdf = qdf.copy()
+                        qdf['Variance'] = qdf['Planned'] - qdf['Spent']
+                    st.dataframe(sanitize_df_for_streamlit(qdf), use_container_width=True, height=360)
+
+                    # Bar chart: Planned vs Spent per category
+                    if all(c in qdf.columns for c in ['Category', 'Planned', 'Spent']):
+                        melt_df = qdf.melt(id_vars='Category', value_vars=['Planned', 'Spent'],
+                                           var_name='Type', value_name='Amount')
+                        # Keep top 20 by Planned magnitude for readability
+                        if len(qdf) > 20:
+                            top_cats = qdf.sort_values('Planned', ascending=False).head(20)['Category']
+                            melt_df = melt_df[melt_df['Category'].isin(top_cats)]
+                        fig, ax = plt.subplots(figsize=(10, 6))
+                        sns.barplot(data=melt_df, x='Amount', y='Category', hue='Type', palette=['#1f77b4', '#d62728'], ax=ax)
+                        ax.set_title(f"Q{q} Planned vs Spent by Category")
+                        ax.set_xlabel("Amount ($)")
+                        ax.set_ylabel("Category")
+                        st.pyplot(fig, clear_figure=True)
         else:
-            st.info("Quarterly summary not available.")
+            # Fallback to raw sheet if parsing fails
+            df = read_sheet(budget_to_view, "Q Summary")
+            if df is not None and not df.empty:
+                st.dataframe(sanitize_df_for_streamlit(df), use_container_width=True)
+            else:
+                st.info("Quarterly summary not available.")
 
     # Yearly
     with tabs[3]:
