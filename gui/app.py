@@ -10,6 +10,7 @@ import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
 import seaborn as sns
+import altair as alt
 from typing import Optional, Tuple
 
 
@@ -178,24 +179,88 @@ def show_top_spending_chart(transactions_xlsx: str, top_n: int = 10):
 
 
 def show_balance_projection_chart(budget_xlsx: str):
+    """Interactive Altair chart for balance trajectory with controls."""
     df = read_sheet(budget_xlsx, "Projection")
     if df is None or "Date" not in df.columns or "Balance" not in df.columns:
         st.info("Projection sheet not found or missing columns.")
         return
+
     df = df.copy()
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-    df = df.dropna(subset=["Date", "Balance"])  # keep valid rows
+    df = df.dropna(subset=["Date", "Balance"]).sort_values("Date")
     if df.empty:
         st.info("No projection data to chart.")
         return
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(df["Date"], df["Balance"], marker="o", linewidth=2, color="steelblue")
-    ax.axhline(y=0, color="red", linestyle="--", alpha=0.5)
-    ax.set_title("Projected Account Balance Over Time")
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Balance ($)")
-    fig.autofmt_xdate()
-    st.pyplot(fig, clear_figure=True)
+
+    # Controls
+    c1, c2, c3 = st.columns([2, 1, 1])
+    with c1:
+        min_d, max_d = df["Date"].min(), df["Date"].max()
+        date_range = st.slider(
+            "Date range",
+            min_value=min_d.to_pydatetime(),
+            max_value=max_d.to_pydatetime(),
+            value=(min_d.to_pydatetime(), max_d.to_pydatetime()),
+            format="%Y-%m-%d",
+        )
+    with c2:
+        granularity = st.selectbox("Granularity", ["Daily", "Monthly"], index=0)
+    with c3:
+        show_points = st.checkbox("Show points", value=False)
+
+    # Resample if monthly
+    plot_df = df[(df["Date"] >= pd.to_datetime(date_range[0])) & (df["Date"] <= pd.to_datetime(date_range[1]))]
+    if granularity == "Monthly":
+        plot_df = (
+            plot_df.set_index("Date")["Balance"].resample("M").last().reset_index()
+        )
+        plot_df["Date"] = pd.to_datetime(plot_df["Date"])  # ensure timestamp
+
+    # KPIs
+    k1, k2, k3 = st.columns(3)
+    k1.metric("Min Balance", f"${plot_df['Balance'].min():,.0f}")
+    k2.metric("Max Balance", f"${plot_df['Balance'].max():,.0f}")
+    k3.metric("End Balance", f"${plot_df['Balance'].iloc[-1]:,.0f}")
+
+    # Altair interactive chart
+    # Compute y-scale domain with small padding and disable scientific format
+    y_min = float(plot_df["Balance"].min())
+    y_max = float(plot_df["Balance"].max())
+    pad = max((y_max - y_min) * 0.05, 1.0)
+    y_domain = [y_min - pad, y_max + pad]
+
+    base = alt.Chart(plot_df).encode(
+        x=alt.X("Date:T", title="Date"),
+        y=alt.Y(
+            "Balance:Q",
+            title="Balance ($)",
+            axis=alt.Axis(format="$,.0f", tickCount=8),
+            scale=alt.Scale(domain=y_domain, nice=True, clamp=True),
+        ),
+        tooltip=[alt.Tooltip("yearmonthdate(Date)", title="Date"), alt.Tooltip("Balance:Q", title="Balance", format=",")],
+    )
+
+    line = base.mark_line(color="#2b6cb0", strokeWidth=2)
+    if show_points:
+        line = line + base.mark_point(size=30, color="#2b6cb0")
+
+    zero_rule = (
+        alt.Chart(pd.DataFrame({"y": [0]}))
+        .mark_rule(strokeDash=[6, 3], color="#e53e3e")
+        .encode(y=alt.Y("y:Q"))
+    )
+
+    area = base.mark_area(opacity=0.1, color="#2b6cb0")
+
+    # Interactive zoom/pan
+    zoom = alt.selection_interval(bind="scales")
+    chart = alt.layer(area, line, zero_rule).add_params(zoom).properties(height=420)
+
+    st.altair_chart(chart.configure_axis(labelFontSize=12, titleFontSize=12), use_container_width=True)
+
+    # Download button
+    csv = plot_df.to_csv(index=False).encode("utf-8")
+    st.download_button("Download projection CSV", data=csv, file_name="projection.csv", mime="text/csv")
 
 
 def show_budget_vs_actual_chart(budget_xlsx: str, transactions_xlsx: str, category: str):
@@ -483,13 +548,14 @@ def main():
 
     # Charts
     with tabs[9]:
-        c1, c2 = st.columns(2)
-        with c1:
-            st.subheader("Top Spending Categories")
-            show_top_spending_chart(transactions_xlsx)
-        with c2:
-            st.subheader("Balance Projection")
-            show_balance_projection_chart(budget_to_view)
+        # Row 1: Top spending only
+        st.subheader("Top Spending Categories")
+        show_top_spending_chart(transactions_xlsx)
+
+        # Row 2: Full-width balance projection
+        st.markdown("---")
+        st.subheader("Balance Projection")
+        show_balance_projection_chart(budget_to_view)
 
         st.markdown("---")
         st.subheader("Budget vs Actual by Category")
