@@ -13,7 +13,9 @@ def write_transactions_xlsx(transactions_input, new_transactions):
     back_up_xls = 'transactions' \
                   + f'_{datetime.date.today().month}_{datetime.date.today().day}_{datetime.date.today().year}_' \
                     f'{datetime.datetime.today().second}.xlsx'
-    shutil.copy('transactions.xlsx', f'archive/{back_up_xls}')
+    # Only back up if an existing transactions file is present
+    if os.path.exists('transactions.xlsx'):
+        shutil.copy('transactions.xlsx', f'archive/{back_up_xls}')
 
     # Create transactions dataframe and output into the Transactions sheet
     dates_to_str(transactions_input)

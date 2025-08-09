@@ -18,10 +18,13 @@ def update_budget(budget_xlsx, transactions, this_year):
     
     # Read in the budget xlsx
     os.makedirs('archive/', exist_ok=True)
-    back_up_xls = budget_xlsx.split('.')[0] \
-                  + f'_{datetime.date.today().month}_{datetime.date.today().day}_{datetime.date.today().year}_' \
-                    f'{datetime.datetime.today().second}.xlsx'
-    shutil.copy(f'{budget_xlsx}', f'archive/{back_up_xls}')
+    # Ensure backup filename does not contain directory components
+    base_name = os.path.basename(budget_xlsx).split('.')[0]
+    back_up_xls = (
+        f"{base_name}_{datetime.date.today().month}_{datetime.date.today().day}_"
+        f"{datetime.date.today().year}_{datetime.datetime.today().second}.xlsx"
+    )
+    shutil.copy(budget_xlsx, os.path.join('archive', back_up_xls))
 
     b = pd.ExcelFile(budget_xlsx, engine='openpyxl')
 
