@@ -14,6 +14,142 @@ import altair as alt
 from typing import Optional, Tuple
 
 
+# --- LCARS (Star Trek) theme palette and helpers ---
+LCARS_COLORS = {
+    "peach": "#FF9966",
+    "salmon": "#FF6F61",
+    "gold": "#FFCC66",
+    "purple": "#9966CC",
+    "teal": "#66CCCC",
+    "blue": "#6699CC",
+    "pink": "#FF99CC",
+    "bg": "#0B0E17",
+    "panel": "#111827",
+    "text": "#E6EDF3",
+}
+
+LCARS_PALETTE = [
+    LCARS_COLORS["peach"],
+    LCARS_COLORS["gold"],
+    LCARS_COLORS["teal"],
+    LCARS_COLORS["purple"],
+    LCARS_COLORS["salmon"],
+    LCARS_COLORS["blue"],
+    LCARS_COLORS["pink"],
+]
+
+
+def inject_lcars_css() -> None:
+    """Inject LCARS-inspired CSS to re-theme Streamlit UI."""
+    st.markdown(
+        f"""
+        <style>
+        html, body, [data-testid="stAppViewContainer"] {{
+            background-color: {LCARS_COLORS['bg']};
+            color: {LCARS_COLORS['text']};
+        }}
+        [data-testid="stHeader"] {{
+            background: transparent;
+        }}
+        [data-testid="stSidebar"] {{
+            background: linear-gradient(180deg, {LCARS_COLORS['panel']}, {LCARS_COLORS['bg']});
+            border-right: 2px solid {LCARS_COLORS['purple']};
+        }}
+        /* Buttons */
+        .stButton > button {{
+            background: {LCARS_COLORS['peach']};
+            color: #0B0B0B;
+            border: 0;
+            border-radius: 24px;
+            padding: 0.5rem 1rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            box-shadow: 0 0 0 2px {LCARS_COLORS['panel']} inset, 0 6px 16px rgba(0,0,0,0.35);
+        }}
+        .stButton > button:hover {{
+            background: {LCARS_COLORS['gold']};
+            transform: translateY(-1px);
+        }}
+        [data-testid="stSidebar"] .stButton > button {{
+            width: 100%;
+        }}
+        /* Tabs */
+        [data-testid="stTabs"] [role="tablist"] {{
+            gap: 8px;
+            border-bottom: 2px solid {LCARS_COLORS['purple']};
+        }}
+        [data-testid="stTabs"] [role="tab"] {{
+            background: {LCARS_COLORS['panel']};
+            color: {LCARS_COLORS['text']};
+            border: 1px solid {LCARS_COLORS['purple']};
+            border-bottom: 0;
+            border-radius: 18px 18px 0 0;
+            padding: 0.35rem 0.9rem;
+        }}
+        [data-testid="stTabs"] [role="tab"][aria-selected="true"] {{
+            background: {LCARS_COLORS['purple']};
+            color: {LCARS_COLORS['bg']};
+        }}
+        /* Expanders */
+        [data-testid="stExpander"] {{
+            background: {LCARS_COLORS['panel']};
+            border-left: 6px solid {LCARS_COLORS['peach']};
+        }}
+        /* Dataframes and code blocks */
+        .stDataFrame, .stTable {{
+            background: {LCARS_COLORS['panel']};
+            border-radius: 12px;
+        }}
+        pre, code {{
+            background: #0D1321 !important;
+            color: {LCARS_COLORS['text']};
+        }}
+        /* LCARS header */
+        .lcars-header {{
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
+            height: 72px;
+            margin: 0 0 12px 0;
+        }}
+        .lcars-bar {{
+            height: 16px;
+            border-radius: 0 24px 24px 0;
+        }}
+        .lcars-peach {{ width: 22%; background: {LCARS_COLORS['peach']}; }}
+        .lcars-salmon {{ width: 14%; background: {LCARS_COLORS['salmon']}; }}
+        .lcars-gold {{ width: 10%; background: {LCARS_COLORS['gold']}; }}
+        .lcars-title {{
+            margin-left: auto;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: {LCARS_COLORS['text']};
+            background: {LCARS_COLORS['panel']};
+            padding: 0.35rem 0.75rem;
+            border-radius: 12px 12px 0 12px;
+            border: 1px solid {LCARS_COLORS['purple']};
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_lcars_header() -> None:
+    st.markdown(
+        """
+        <div class="lcars-header">
+            <div class="lcars-bar lcars-peach"></div>
+            <div class="lcars-bar lcars-salmon"></div>
+            <div class="lcars-bar lcars-gold"></div>
+            <div class="lcars-title">MoneyMage Budget Meeting</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 # Ensure project root is on sys.path when running via `streamlit run gui/app.py`
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 if PROJECT_ROOT not in sys.path:
@@ -170,11 +306,14 @@ def show_top_spending_chart(transactions_xlsx: str, top_n: int = 10):
         return
     sns.set_theme(style="whitegrid")
     fig, ax = plt.subplots(figsize=(10, 6))
-    # Assign hue explicitly to avoid seaborn deprecation
-    sns.barplot(x=top.values, y=top.index, hue=top.index, palette="viridis", legend=False, ax=ax)
-    ax.set_title(f"Top {top_n} Categories by Spending")
-    ax.set_xlabel("Amount ($)")
-    ax.set_ylabel("Category")
+    palette = LCARS_PALETTE * (len(top) // len(LCARS_PALETTE) + 1)
+    sns.barplot(x=top.values, y=top.index, hue=top.index, palette=palette[: len(top)], legend=False, ax=ax)
+    ax.set_title(f"Top {top_n} Categories by Spending", color=LCARS_COLORS['text'])
+    ax.set_xlabel("Amount ($)", color=LCARS_COLORS['text'])
+    ax.set_ylabel("Category", color=LCARS_COLORS['text'])
+    ax.set_facecolor(LCARS_COLORS['panel'])
+    fig.patch.set_facecolor(LCARS_COLORS['panel'])
+    ax.tick_params(colors=LCARS_COLORS['text'])
     st.pyplot(fig, clear_figure=True)
 
 
@@ -240,23 +379,32 @@ def show_balance_projection_chart(budget_xlsx: str):
         tooltip=[alt.Tooltip("yearmonthdate(Date)", title="Date"), alt.Tooltip("Balance:Q", title="Balance", format=",")],
     )
 
-    line = base.mark_line(color="#2b6cb0", strokeWidth=2)
+    line = base.mark_line(color=LCARS_COLORS['blue'], strokeWidth=2)
     if show_points:
-        line = line + base.mark_point(size=30, color="#2b6cb0")
+        line = line + base.mark_point(size=30, color=LCARS_COLORS['blue'])
 
     zero_rule = (
         alt.Chart(pd.DataFrame({"y": [0]}))
-        .mark_rule(strokeDash=[6, 3], color="#e53e3e")
+        .mark_rule(strokeDash=[6, 3], color=LCARS_COLORS['salmon'])
         .encode(y=alt.Y("y:Q"))
     )
 
-    area = base.mark_area(opacity=0.1, color="#2b6cb0")
+    area = base.mark_area(opacity=0.1, color=LCARS_COLORS['blue'])
 
     # Interactive zoom/pan
     zoom = alt.selection_interval(bind="scales")
     chart = alt.layer(area, line, zero_rule).add_params(zoom).properties(height=420)
 
-    st.altair_chart(chart.configure_axis(labelFontSize=12, titleFontSize=12), use_container_width=True)
+    st.altair_chart(
+        chart.configure_axis(
+            labelFontSize=12,
+            titleFontSize=12,
+            labelColor=LCARS_COLORS['text'],
+            titleColor=LCARS_COLORS['text'],
+            gridColor='#223047'
+        ),
+        use_container_width=True,
+    )
 
     # Download button
     csv = plot_df.to_csv(index=False).encode("utf-8")
@@ -310,11 +458,14 @@ def show_budget_vs_actual_chart(budget_xlsx: str, transactions_xlsx: str, catego
     width = 0.4
     # Convert negative budgets to positive for display of expenses
     plot_budget = [abs(v) if pd.notna(v) and v < 0 else (0 if pd.isna(v) else v) for v in budget_vals]
-    ax.bar([i - width/2 for i in x], plot_budget, width, label="Budgeted", color="#1f77b4", alpha=0.75)
-    ax.bar([i + width/2 for i in x], actuals, width, label="Actual", color="#2ca02c", alpha=0.75)
-    ax.set_title(f"Monthly Budget vs Actual: {category}")
-    ax.set_xlabel("Month")
-    ax.set_ylabel("Amount ($)")
+    ax.bar([i - width/2 for i in x], plot_budget, width, label="Budgeted", color=LCARS_COLORS['gold'], alpha=0.8)
+    ax.bar([i + width/2 for i in x], actuals, width, label="Actual", color=LCARS_COLORS['teal'], alpha=0.8)
+    ax.set_title(f"Monthly Budget vs Actual: {category}", color=LCARS_COLORS['text'])
+    ax.set_xlabel("Month", color=LCARS_COLORS['text'])
+    ax.set_ylabel("Amount ($)", color=LCARS_COLORS['text'])
+    ax.set_facecolor(LCARS_COLORS['panel'])
+    fig.patch.set_facecolor(LCARS_COLORS['panel'])
+    ax.tick_params(colors=LCARS_COLORS['text'])
     ax.set_xticks(list(x))
     ax.set_xticklabels([m.split(" ")[0] for m in months], rotation=0)
     ax.legend()
@@ -322,8 +473,9 @@ def show_budget_vs_actual_chart(budget_xlsx: str, transactions_xlsx: str, catego
 
 
 def main():
-    st.set_page_config(page_title="MoneyMage Budget Meeting", layout="wide")
-    st.title("MoneyMage Budget Meeting")
+    st.set_page_config(page_title="MoneyMage Budget Meeting", page_icon="🖖", layout="wide", initial_sidebar_state="expanded")
+    inject_lcars_css()
+    render_lcars_header()
     st.caption("Run updates, preview diffs, and visualize your budget.")
 
     # Sidebar controls
@@ -416,6 +568,18 @@ def main():
     tabs = st.tabs([
         "Overview", "Diffs", "Quarterly", "Yearly", "Yearly Remaining", "Projection", "Monthly", "Categories", "Balances", "Charts"
     ])
+    # Add LCARS accent bars under tabs
+    st.markdown(
+        f"""
+        <div style="display:flex; gap:8px; margin: 6px 0 12px 0;">
+            <div class="lcars-bar" style="width:18%; background:{LCARS_COLORS['peach']}"></div>
+            <div class="lcars-bar" style="width:10%; background:{LCARS_COLORS['gold']}"></div>
+            <div class="lcars-bar" style="width:6%; background:{LCARS_COLORS['teal']}"></div>
+            <div class="lcars-bar" style="width:4%; background:{LCARS_COLORS['purple']}"></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     budget_to_view = st.session_state.get("last_budget_path")
     if not file_exists(budget_to_view):
