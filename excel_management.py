@@ -468,9 +468,14 @@ def write_budget(budget_dict, projection_dict, initial_sheets, monthly_sums_dict
     # this_year = datetime.date.today().year
     end_of_years = [datetime.date(this_year + i, 12, 31) for i in range(0, 6)]
     last_amount_in_years = []
+    # Use the last available projection on or before each year-end; fallback to 0.0 if none
     for end_of_year in end_of_years:
-        i_locs = [i for i, x in enumerate(projection_dict['Date']) if x == end_of_year]
-        last_amount_in_years.append(projection_dict['Balance'][i_locs[-1]])
+        eligible_indices = [i for i, d in enumerate(projection_dict['Date']) if d <= end_of_year]
+        if eligible_indices:
+            idx = max(eligible_indices)
+            last_amount_in_years.append(projection_dict['Balance'][idx])
+        else:
+            last_amount_in_years.append(0.0)
 
     # Make the projection sheet
     print(f'Writing new budget xls: {xls_name}')
@@ -525,6 +530,8 @@ def write_budget(budget_dict, projection_dict, initial_sheets, monthly_sums_dict
 
     # Loop over each category and create the spreadsheet
     for category in categories_organized:
+        if category not in budget_dict:
+            continue
         # print(category)
         category_budget_raw = budget_dict[category]
         category_budget = make_dict_list_same_len(category_budget_raw)
