@@ -538,6 +538,10 @@ def write_budget(budget_dict, projection_dict, initial_sheets, monthly_sums_dict
         dates_to_str(category_budget)
         df = pd.DataFrame(category_budget)
 
+        # Remove 'Remaining' from category sheets (it should not appear there)
+        if 'Remaining' in df.columns:
+            df = df.drop(columns=['Remaining'])
+
         # If Month in df columns then add empty column at position 5
         if 'End of Month' in df.columns and category not in category_types['Monthly'] and ' ' not in df.columns:
             if category in category_types['Loan']:
