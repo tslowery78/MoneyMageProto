@@ -344,6 +344,7 @@ def main():
         import_new = st.button("Import + Auto-categorize Transactions")
         update_auto = st.button("Update Auto-Categories from Reconciled")
         open_budget = st.button("Open Budget in Finder")
+        open_transactions = st.button("Open Transactions in Finder")
 
     # Session state for last result
     if "last_budget_path" not in st.session_state:
@@ -398,6 +399,13 @@ def main():
         try:
             # macOS open
             os.system(f"open '{st.session_state['last_budget_path']}'")
+        except Exception:
+            pass
+
+    if open_transactions and file_exists(transactions_xlsx):
+        try:
+            # macOS open
+            os.system(f"open '{transactions_xlsx}'")
         except Exception:
             pass
 
