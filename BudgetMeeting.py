@@ -9,6 +9,7 @@ from transactions import get_transactions, update_auto_categories
 from budget_functions import remove_budget_integers, get_forward_budget
 from get_sums import get_monthly_sums
 from pandas.errors import ParserError
+from date_utils import parse_dates_list, suggest_date_fix
 import shutil
 
 
@@ -70,31 +71,14 @@ def update_budget(budget_xlsx, transactions, this_year):
                 budget['Date'] = ['' if pd.isna(x) else x for x in budget['Date']]
                 budget = remove_empty_rows(budget, 'Date')
                 try:
-                    # Attempt to process the dates
-                    processed_dates = []
-                    for date_val in budget['Date']:
-                        if isinstance(date_val, str):
-                            processed_dates.append(datetime.datetime.strptime(date_val.split(',')[0], '%m/%d/%Y').date())
-                        elif hasattr(date_val, 'date'):  # Handles datetime and pandas Timestamp
-                            processed_dates.append(date_val.date())
-                        elif isinstance(date_val, datetime.date):  # Already a date object
-                            processed_dates.append(date_val)
-                        else:
-                            # This will catch integers and other unexpected types and fail
-                            raise AttributeError(f"Unexpected type '{type(date_val).__name__}' cannot be converted to a date.")
-                    budget['Date'] = processed_dates
-                except (AttributeError, ValueError, TypeError) as e:
-                    # Find the problematic value to create a helpful error message
-                    for i, x in enumerate(budget['Date']):
-                        if not isinstance(x, (str, datetime.datetime, datetime.date, pd.Timestamp)) and not pd.isna(x):
-                            raise TypeError(
-                                f"\n\nError in budget sheet for category: '{category}'"
-                                f"Found an invalid value: '{x}' (type: {type(x).__name__})"
-                                f"Location: 'Date' column, at approximately row {i + 2} in the Excel sheet."
-                                f"Please correct the value to a valid date format (e.g., MM/DD/YYYY)."
-                            ) from e
-                    # Generic fallback error if the specific one isn't found
-                    raise TypeError(f"A date processing error occurred in category '{category}'. Please check the sheet. Original error: {e}") from e
+                    # Use the robust date parsing utility
+                    budget['Date'] = parse_dates_list(budget['Date'])
+                except ValueError as e:
+                    raise TypeError(
+                        f"\n\nError in budget sheet for category: '{category}'\n"
+                        f"{str(e)}\n"
+                        f"Please correct the date values in the Excel sheet."
+                    ) from e
 
             budget = remove_budget_integers(budget)
             budgets[category], projections[category], forecasts[category] = \
