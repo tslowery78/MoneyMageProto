@@ -31,6 +31,10 @@ def parse_date_robust(date_val: Any) -> datetime.date:
     if pd.isna(date_val) or date_val == '':
         raise ValueError("Empty or NaN date value")
         
+    # datetime objects (must check before date since datetime is subclass of date)
+    if isinstance(date_val, datetime.datetime):
+        return date_val.date()
+        
     # Already a date object
     if isinstance(date_val, datetime.date):
         return date_val
