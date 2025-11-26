@@ -4,18 +4,21 @@ from utilities import make_dict_list_same_len, dates_to_str, remove_list_blanks_
 import os
 import shutil
 from xlsxwriter.utility import xl_col_to_name
+from config import get_archive_dir, get_transactions_path
 
 
 def write_transactions_xlsx(transactions_input, new_transactions):
     """Function to write transactions into an xlsx"""
 
-    os.makedirs('archive/', exist_ok=True)
+    archive_dir = get_archive_dir()  # Creates dir if needed
+    transactions_path = get_transactions_path()
+    
     back_up_xls = 'transactions' \
                   + f'_{datetime.date.today().month}_{datetime.date.today().day}_{datetime.date.today().year}_' \
                     f'{datetime.datetime.today().second}.xlsx'
     # Only back up if an existing transactions file is present
-    if os.path.exists('transactions.xlsx'):
-        shutil.copy('transactions.xlsx', f'archive/{back_up_xls}')
+    if transactions_path.exists():
+        shutil.copy(transactions_path, archive_dir / back_up_xls)
 
     # Create transactions dataframe and output into the Transactions sheet
     dates_to_str(transactions_input)
@@ -24,7 +27,7 @@ def write_transactions_xlsx(transactions_input, new_transactions):
     df_new_transactions = pd.DataFrame.from_dict(new_transactions)
     df.sort_values('Date', inplace=True)
     df_new_transactions.sort_values('Date', inplace=True)
-    writer = pd.ExcelWriter('transactions.xlsx', engine='xlsxwriter')
+    writer = pd.ExcelWriter(transactions_path, engine='xlsxwriter')
     df.to_excel(writer, sheet_name='Transactions', index=False, na_rep='')
     df_new_transactions.to_excel(writer, sheet_name='Imported', index=False, na_rep='')
 

@@ -4,6 +4,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime, date, timedelta
 import os
+from config import get_transactions_path, get_budget_path, OUTPUTS_DIR
+
+
+def get_plots_dir():
+    """Get the plots directory path, creating it if needed."""
+    plots_dir = OUTPUTS_DIR / 'plots'
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    return plots_dir
 
 def setup_plotting_style():
     """Set up a consistent plotting style for all visualizations"""
@@ -18,19 +26,23 @@ def setup_plotting_style():
     plt.rcParams['figure.titlesize'] = 18
     
     # Create a directory for saving plots if it doesn't exist
-    if not os.path.exists('plots'):
-        os.makedirs('plots')
+    plots_dir = OUTPUTS_DIR / 'plots'
+    plots_dir.mkdir(parents=True, exist_ok=True)
 
-def load_transaction_data(file_path='transactions.xlsx'):
+def load_transaction_data(file_path=None):
     """Load and prepare transaction data"""
+    if file_path is None:
+        file_path = str(get_transactions_path())
     df = pd.read_excel(file_path)
     # Ensure Date is datetime
     if not pd.api.types.is_datetime64_any_dtype(df['Date']):
         df['Date'] = pd.to_datetime(df['Date'])
     return df
 
-def load_budget_data(file_path='Budget_2025.xlsx'):
+def load_budget_data(file_path=None):
     """Load budget data from various sheets"""
+    if file_path is None:
+        file_path = str(get_budget_path())
     # Load different sheets
     monthly_budget = pd.read_excel(file_path, sheet_name='Monthly')
     projection = pd.read_excel(file_path, sheet_name='Projection')
@@ -71,7 +83,7 @@ def plot_monthly_spending_by_category(df, top_n=10, save=True):
     plt.tight_layout()
     
     if save:
-        plt.savefig('plots/monthly_spending_by_category.png', dpi=300, bbox_inches='tight')
+        plt.savefig(get_plots_dir() / 'monthly_spending_by_category.png', dpi=300, bbox_inches='tight')
     
     plt.show()
 
@@ -112,7 +124,7 @@ def plot_spending_trend_over_time(df, top_categories=None, save=True):
     plt.tight_layout()
     
     if save:
-        plt.savefig('plots/spending_trend_over_time.png', dpi=300, bbox_inches='tight')
+        plt.savefig(get_plots_dir() / 'spending_trend_over_time.png', dpi=300, bbox_inches='tight')
     
     plt.show()
 
@@ -174,7 +186,7 @@ def plot_income_vs_expenses(df, monthly=True, save=True):
         plt.tight_layout()
         
         if save:
-            plt.savefig('plots/monthly_income_vs_expenses.png', dpi=300, bbox_inches='tight')
+            plt.savefig(get_plots_dir() / 'monthly_income_vs_expenses.png', dpi=300, bbox_inches='tight')
         
         plt.show()
 
@@ -202,7 +214,7 @@ def plot_balance_projection(budget_data, save=True):
     plt.tight_layout()
     
     if save:
-        plt.savefig('plots/balance_projection.png', dpi=300, bbox_inches='tight')
+        plt.savefig(get_plots_dir() / 'balance_projection.png', dpi=300, bbox_inches='tight')
     
     plt.show()
 
@@ -226,7 +238,7 @@ def plot_spending_by_account(df, save=True):
     plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle
     
     if save:
-        plt.savefig('plots/spending_by_account.png', dpi=300, bbox_inches='tight')
+        plt.savefig(get_plots_dir() / 'spending_by_account.png', dpi=300, bbox_inches='tight')
     
     plt.show()
     
@@ -248,7 +260,7 @@ def plot_spending_by_account(df, save=True):
     plt.tight_layout()
     
     if save:
-        plt.savefig('plots/spending_by_account_bar.png', dpi=300, bbox_inches='tight')
+        plt.savefig(get_plots_dir() / 'spending_by_account_bar.png', dpi=300, bbox_inches='tight')
     
     plt.show()
 
@@ -328,7 +340,7 @@ def plot_monthly_budget_vs_actual(budget_data, transactions_df, category, save=T
     plt.tight_layout()
     
     if save:
-        plt.savefig(f'plots/monthly_budget_vs_actual_{category.replace(" ", "_")}.png', dpi=300, bbox_inches='tight')
+        plt.savefig(get_plots_dir() / f'monthly_budget_vs_actual_{category.replace(" ", "_")}.png', dpi=300, bbox_inches='tight')
     
     plt.show()
 

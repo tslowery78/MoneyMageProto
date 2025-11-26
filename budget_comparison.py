@@ -7,6 +7,7 @@ import argparse
 from datetime import datetime
 import glob
 from visualization import setup_plotting_style, load_budget_data, load_transaction_data
+from config import get_archive_dir
 
 def get_budget_versions(date_pattern=None):
     """Find budget file versions based on a date pattern
@@ -17,10 +18,11 @@ def get_budget_versions(date_pattern=None):
     Returns:
         List of budget filenames sorted by timestamp
     """
+    archive_dir = get_archive_dir()
     if date_pattern:
-        pattern = f"archive/Budget_2025_{date_pattern}_*.xlsx"
+        pattern = str(archive_dir / f"Budget_2025_{date_pattern}_*.xlsx")
     else:
-        pattern = "archive/Budget_2025_*.xlsx"
+        pattern = str(archive_dir / "Budget_2025_*.xlsx")
     
     budget_files = glob.glob(pattern)
     
@@ -38,10 +40,11 @@ def get_transaction_versions(date_pattern=None):
     Returns:
         List of transaction filenames sorted by timestamp
     """
+    archive_dir = get_archive_dir()
     if date_pattern:
-        pattern = f"archive/transactions_{date_pattern}_*.xlsx"
+        pattern = str(archive_dir / f"transactions_{date_pattern}_*.xlsx")
     else:
-        pattern = "archive/transactions_*.xlsx"
+        pattern = str(archive_dir / "transactions_*.xlsx")
     
     transaction_files = glob.glob(pattern)
     

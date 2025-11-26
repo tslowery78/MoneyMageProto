@@ -11,6 +11,7 @@ from get_sums import get_monthly_sums
 from pandas.errors import ParserError
 from date_utils import parse_dates_list, suggest_date_fix
 import shutil
+from config import get_budget_path, get_transactions_path, get_archive_dir
 
 
 def update_budget(budget_xlsx, transactions, this_year):
@@ -18,14 +19,14 @@ def update_budget(budget_xlsx, transactions, this_year):
 
     
     # Read in the budget xlsx
-    os.makedirs('archive/', exist_ok=True)
+    archive_dir = get_archive_dir()  # Creates dir if needed
     # Ensure backup filename does not contain directory components
     base_name = os.path.basename(budget_xlsx).split('.')[0]
     back_up_xls = (
         f"{base_name}_{datetime.date.today().month}_{datetime.date.today().day}_"
         f"{datetime.date.today().year}_{datetime.datetime.today().second}.xlsx"
     )
-    shutil.copy(budget_xlsx, os.path.join('archive', back_up_xls))
+    shutil.copy(budget_xlsx, archive_dir / back_up_xls)
 
     b = pd.ExcelFile(budget_xlsx, engine='openpyxl')
 
@@ -398,9 +399,10 @@ if __name__ == '__main__':
 
     # Get args
     parser = argparse.ArgumentParser()
-    parser.add_argument('-y', help='the year of the budget', type=int, default=2025)
-    parser.add_argument('-b', help='budget xls', default='Budget_2025.xlsx')
-    parser.add_argument('-t', help='trans xls', default='transactions.xlsx')
+    this_year = datetime.date.today().year
+    parser.add_argument('-y', help='the year of the budget', type=int, default=this_year)
+    parser.add_argument('-b', help='budget xls', default=str(get_budget_path(this_year)))
+    parser.add_argument('-t', help='trans xls', default=str(get_transactions_path()))
     args = parser.parse_args()
 
     # Do the budget

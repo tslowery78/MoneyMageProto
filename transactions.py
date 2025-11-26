@@ -6,16 +6,13 @@ from excel_management import write_transactions_xlsx
 import glob
 from itertools import combinations
 import re
+from config import get_downloads_dir, get_auto_categories_path, get_transactions_path
 
 
 def get_new_transactions():
 
-    import platform
-    if platform.system() == 'Darwin':
-        # Temporarily using current directory instead of Downloads due to permission issues
-        downloads_dir = './'  # Changed from '/Users/tslowery/Downloads/'
-    else:
-        downloads_dir = 'C:\\Users\\tslow\\Downloads\\'
+    # Use configured downloads directory from config.py
+    downloads_dir = str(get_downloads_dir()) + '/'
     
     try:
         wf_file = glob.glob(f'{downloads_dir}CreditCard*.csv')[0]
@@ -129,13 +126,14 @@ def get_new_transactions():
 def run_auto_categorization(transactions):
     """Applies auto-categorization rules to uncategorized transactions."""
     print("Running auto-categorization on all uncategorized transactions...")
+    auto_categories_path = str(get_auto_categories_path())
     try:
-        b = pd.ExcelFile('auto_categories.xlsx')
+        b = pd.ExcelFile(auto_categories_path)
         df_auto_cats = b.parse()
         auto_cats = df_auto_cats.to_dict('list')
         b.close()
     except FileNotFoundError:
-        print("auto_categories.xlsx not found, skipping auto-categorization.")
+        print(f"{auto_categories_path} not found, skipping auto-categorization.")
         return transactions
 
     categorized_count = 0
@@ -497,9 +495,15 @@ def clean_split_transactions(transactions):
         return transactions
 
 
-def update_auto_categories(transactions_xlsx='transactions.xlsx', auto_categories_xlsx='auto_categories.xlsx'):
+def update_auto_categories(transactions_xlsx=None, auto_categories_xlsx=None):
     import pandas as pd
     import os
+    
+    # Use config defaults if not specified
+    if transactions_xlsx is None:
+        transactions_xlsx = str(get_transactions_path())
+    if auto_categories_xlsx is None:
+        auto_categories_xlsx = str(get_auto_categories_path())
 
     # Read transactions
     df_trans = pd.read_excel(transactions_xlsx, sheet_name='Transactions')

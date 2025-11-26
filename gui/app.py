@@ -157,6 +157,7 @@ if PROJECT_ROOT not in sys.path:
 
 from BudgetMeeting import update_budget, BudgetMeeting as run_budget_meeting  # noqa: E402
 from transactions import get_transactions, update_auto_categories  # noqa: E402
+from config import get_budget_path, get_transactions_path, get_archive_dir  # noqa: E402
 
 
 def file_exists(path: str) -> bool:
@@ -185,9 +186,9 @@ def run_budget_meeting_preview(original_budget_xlsx: str, transactions_xlsx: str
     Returns: (preview_budget_path, logs)
     """
     # Copy to a temp file under archive/ for easy discovery
-    os.makedirs(os.path.join(PROJECT_ROOT, "archive"), exist_ok=True)
+    archive_dir = get_archive_dir()  # Creates dir if needed
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    preview_path = os.path.join(PROJECT_ROOT, "archive", f"PREVIEW_{ts}_" + os.path.basename(original_budget_xlsx))
+    preview_path = str(archive_dir / f"PREVIEW_{ts}_{os.path.basename(original_budget_xlsx)}")
     shutil.copyfile(original_budget_xlsx, preview_path)
 
     log_buffer = io.StringIO()
@@ -481,12 +482,13 @@ def main():
     # Sidebar controls
     with st.sidebar:
         st.header("Configuration")
-        default_budget = os.path.join(PROJECT_ROOT, "Budget_2025.xlsx")
-        default_transactions = os.path.join(PROJECT_ROOT, "transactions.xlsx")
+        current_year = datetime.date.today().year
+        default_budget = str(get_budget_path(current_year))
+        default_transactions = str(get_transactions_path())
 
         budget_xlsx = st.text_input("Budget file", value=default_budget)
         transactions_xlsx = st.text_input("Transactions file", value=default_transactions)
-        year = st.number_input("Budget year", value=datetime.date.today().year, step=1)
+        year = st.number_input("Budget year", value=current_year, step=1)
 
         run_live = st.button("Run Budget Meeting (Live End-to-End)", type="primary")
         run_preview = st.button("Preview Update Budget (Dry Run)")

@@ -10,6 +10,7 @@ from budget_comparison import (
     compare_and_plot_budget_versions, get_budget_versions, get_transaction_versions,
     compare_and_plot_transaction_versions
 )
+from config import get_transactions_path, get_budget_path
 
 def main():
     """Main CLI function to generate plots"""
@@ -18,10 +19,10 @@ def main():
     # Standard visualization options
     parser.add_argument('--all', action='store_true', help='Generate all plots')
     parser.add_argument('--no-save', action='store_true', help='Do not save plots to files')
-    parser.add_argument('--transactions', type=str, default='transactions.xlsx', 
-                        help='Path to transactions Excel file (default: transactions.xlsx)')
-    parser.add_argument('--budget', type=str, default='Budget_2025.xlsx', 
-                        help='Path to budget Excel file (default: Budget_2025.xlsx)')
+    parser.add_argument('--transactions', type=str, default=str(get_transactions_path()), 
+                        help='Path to transactions Excel file')
+    parser.add_argument('--budget', type=str, default=str(get_budget_path()), 
+                        help='Path to budget Excel file')
     
     # Specific plot types
     parser.add_argument('--top-spending', action='store_true', help='Plot top spending categories')
